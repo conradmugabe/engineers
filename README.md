@@ -53,9 +53,9 @@ directory under `.claude/skills/<role>/`, which the agent loads as its first act
 
 - `plan-feature`, `orchestrate` — the two workflow playbooks
 - `backend-engineer`, `frontend-engineer`, `qa-engineer`, `reviewer`, `blind-tester` — role playbooks
-- `conventions` — **the owner's accumulated preferences as a developer.** Every agent
-  loads it. The principal engineer updates it whenever the owner expresses a preference.
-  This is how the team learns.
+- Topical craft skills, named for what they are — `react`, `api-calls`, and whatever
+  comes next. They grow through real project work: the owner reviews what agents do
+  and tells the principal engineer what to add or remove.
 
 **Project layer** (created per project, never copied back):
 
@@ -64,8 +64,8 @@ directory under `.claude/skills/<role>/`, which the agent loads as its first act
 - Any project-specific skills the project needs (e.g. `design-system` for its visual
   language). Role playbooks check for these and load them when present.
 
-On conflict, the project layer wins — `conventions` says how the owner likes software
-built anywhere; `project-context` says what is true here.
+On conflict, the project layer wins — core skills say how this team builds software
+anywhere; `project-context` says what is true here.
 
 ## Installing into a project
 

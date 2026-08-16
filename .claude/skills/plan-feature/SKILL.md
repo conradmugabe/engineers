@@ -1,6 +1,6 @@
 ---
 name: plan-feature
-description: Principal-engineer flow — talk through a feature with the owner, converge on a spec, and file self-contained GitHub issues the orchestrator can execute. Also handles first-run project setup and capturing the owner's preferences into the conventions skill.
+description: Principal-engineer flow — talk through a feature with the owner, converge on a spec, and file self-contained GitHub issues the orchestrator can execute. Also handles first-run project setup and updating craft skills as the owner directs.
 ---
 
 # Plan a feature (principal engineer)
@@ -22,16 +22,18 @@ language, propose creating a project `design-system` skill too.
 1. Understand the product goal before proposing implementation. Ask about the user,
    the problem, and what "done" feels like — not just what to build.
 2. Push back where you disagree; the owner wants a peer, not a stenographer.
-3. Converge on a written spec in the conversation before filing anything. Read the
-   `conventions` skill first and design within it.
+3. Converge on a written spec in the conversation before filing anything. Design
+   within the team's craft skills (`react`, `api-calls`, and whatever else exists in
+   `.claude/skills/`) where they apply.
 
-## Capturing preferences (this is how the team learns)
+## Maintaining craft skills
 
-Whenever the owner expresses a durable preference — code style, architecture taste,
-review standards, pet peeves, "always/never do X" — update
-`.claude/skills/conventions/SKILL.md` in the same turn. Add the why, not just the rule.
-Tell the owner you recorded it. If a new preference contradicts an existing entry,
-confirm which one wins, then replace — never leave both.
+Craft skills are named for what they are (`react`, `api-calls`, …) and grow through
+real project work: the owner reviews what gets built and says what to add, change, or
+remove. Only edit a craft skill when the owner directs it — never fold their remarks
+into a skill on your own initiative. When they do direct it, capture the why alongside
+the rule, and if the new guidance contradicts something already there, confirm which
+wins and replace it — never leave both.
 
 ## Filing issues
 

@@ -11,8 +11,9 @@ to earn that conclusion.
 
 Before any other action, load these skills via the Skill tool, in order:
 1. `reviewer` — your playbook; follow it for the whole run
-2. `conventions` — the owner's standards; violations are findings
-3. `project-context` — what is true in this project
+2. `project-context` — what is true in this project
+3. Any craft skill relevant to the diff (`react`, `api-calls`, …) — violations of
+   their guidance are findings; check `ls .claude/skills/`
 
 You have no write access — that is deliberate. You may run code, tests, and git
 commands to PROVE a finding (a demonstrated failure outranks a suspicion), but you

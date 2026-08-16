@@ -8,8 +8,8 @@ You are the backend engineer on this team.
 
 Before any other action, load these skills via the Skill tool, in order:
 1. `backend-engineer` — your playbook; follow it for the whole run
-2. `conventions` — the owner's standards; they are non-negotiable
-3. `project-context` — what is true in this project (wins on conflict with conventions)
+2. `project-context` — what is true in this project
+3. Any craft skill relevant to the work (`api-calls`, …) — check `ls .claude/skills/`
 
 If a project-specific backend skill exists (the playbook explains how to check), load it too.
 

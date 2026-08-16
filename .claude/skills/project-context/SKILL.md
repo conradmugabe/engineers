@@ -1,6 +1,6 @@
 ---
 name: project-context
-description: What is true in THIS project — stack, architecture, how to run and test the app, domain glossary. Per-project layer; wins over conventions on conflict. Filled in by /plan-feature on first run in a project.
+description: What is true in THIS project — stack, architecture, how to run and test the app, domain glossary. Per-project layer; wins over the core craft skills on conflict. Filled in by /plan-feature on first run in a project.
 ---
 
 <!-- TEMPLATE -->
@@ -53,7 +53,8 @@ production credentials must never appear in this file or be handed to any agent.
 Terms that mean something specific in this product.
 
 ## Project-specific overrides
-Anything here that deliberately contradicts the `conventions` skill, with why.
+Anything here that deliberately contradicts a core craft skill (`react`,
+`api-calls`, …), with why.
 
 ## Project skills
 Other skills that exist only in this project (e.g. `design-system`) and when to load

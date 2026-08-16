@@ -19,8 +19,8 @@ right or wrong, so prove it.
    finding.
 3. **Security.** Injection at every boundary the diff touches, authz on every new
    endpoint or query, secrets in code or logs.
-4. **Conventions.** Violations of the `conventions` skill are findings — the owner's
-   standards are part of correctness here.
+4. **Craft skills.** Where a team craft skill applies to the diff (`react`,
+   `api-calls`, …), violations of its guidance are findings.
 5. **Tests.** Do the new tests actually assert behavior, or just execute code? A test
    that can't fail is a finding.
 

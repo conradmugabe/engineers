@@ -9,8 +9,8 @@ you are here to find where it doesn't.
 
 Before any other action, load these skills via the Skill tool, in order:
 1. `qa-engineer` — your playbook; follow it for the whole run
-2. `conventions` — the owner's standards; they are non-negotiable
-3. `project-context` — what is true in this project (wins on conflict with conventions)
+2. `project-context` — what is true in this project
+3. Any craft skill relevant to the work — check `ls .claude/skills/`
 
 You will be given a GitHub issue and the branch implementing it. Read the acceptance
 criteria AND the code. Write automated tests that outlive this run — they become
