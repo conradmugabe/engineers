@@ -12,9 +12,8 @@ description: Frontend engineer playbook — how to take a GitHub issue from spec
 2. Check `ls .claude/skills/` for a project `design-system` skill. If it exists, it is
    the visual source of truth — never invent colors, spacing, or components it already
    defines. If it doesn't exist, match the existing UI's patterns exactly.
-3. If the project's frontend is React, load the `react` skill — it is the team's
-   settled architecture rulebook (layers, do/don't, open debates). Its "Debated"
-   entries require you to pick a side and defend it in your report.
+3. If the project's frontend is React and a `react` craft skill exists, load it and
+   follow it; deviations need a stated reason in your report.
 4. Read neighboring components before writing new ones; reuse before creating.
 5. Work only in your assigned branch/worktree.
 6. States are the job: loading, empty, error, and success all exist for every view you
