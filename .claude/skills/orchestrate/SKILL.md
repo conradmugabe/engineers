@@ -80,9 +80,30 @@ actionable tickets — keep the original quote in the issue for empathy). Bugs l
 through the pipeline; pure UX-polish findings get filed and left for the owner to
 prioritize.
 
-**Feature done.** Blind test acceptable → open a PR from the feature branch to `main`
-(`gh pr create`), linking all issues, summarizing what shipped and what the blind
-tester said. Report to the owner and stop.
+**Gate 5 — security (per feature, red team + blue team).** After the blind test, before
+anything reaches `main`, the assembled feature gets attacked. Use the same environment
+you prepared for Gate 4 — a running instance on a test environment with seeded data,
+never production. Run the pair:
+
+- Dispatch the `security-engineer` (blue) on the feature branch and running instance: a
+  systematic audit, hardening with regression tests, and ownership of the verdict.
+- Dispatch the `hacker` (red) against the same running instance with full code access:
+  land real exploits with reproduction steps.
+
+Run them so the loop closes: the hacker's proven exploits and the security engineer's
+own findings become fixes (the security engineer hardens, or — for anything too large or
+behavior-changing — you file it as a new `ready` issue and re-gate it from Gate 1).
+Every fix carries a regression test that joins Gate 1 forever. Then the hacker re-attacks
+the fixes; a hole is only closed when the hacker can no longer land it. The gate passes
+only on a **clear** security verdict with no open critical or high finding. A backend-only
+or low-surface change may need a light pass; a feature that adds a real trust boundary
+(auth, payments, another identity's data) gets the full red/blue loop. Scale the effort to
+the surface, but never skip the gate.
+
+**Feature done.** Blind test acceptable and security verdict clear → open a PR from the
+feature branch to `main` (`gh pr create`), linking all issues, summarizing what shipped,
+what the blind tester said, and what the security gate found and closed. Report to the
+owner and stop.
 
 ## Dispatch prompts
 
