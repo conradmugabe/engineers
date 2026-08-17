@@ -11,10 +11,16 @@ through GitHub Issues, non-blocking, verified at every gate.
 |---|---|---|---|
 | Principal engineer | Interactive session + `/plan-feature` | Fable | Full |
 | Orchestrator | Interactive session + `/orchestrate` | Fable/Opus | Full |
+| Product analyst | Subagent | Opus | Full tools — owns intake and requirements |
+| Researcher | Subagent | Opus | **Web only** — no shell, no files; reads untrusted text so it cannot act |
+| Critic | Subagent | Opus | Read only — attacks stage artifacts, never decides |
+| Judge | Subagent | Opus | Read + execute — decides PASS/REVISE/HUMAN_REQUIRED, never authors |
 | Backend engineer | Subagent | Opus | Full tools |
 | Frontend engineer | Subagent | Opus | Full tools |
 | QA engineer | Subagent | Opus | Full tools |
 | Reviewer | Subagent | Opus | Read + execute only — cannot edit files |
+| Hacker | Subagent | Opus | Read + execute + offensive browser tools — cannot edit files |
+| Security engineer | Subagent | Opus | Full tools — audits and hardens |
 | Blind tester | Subagent | Opus | Browser only — **cannot open a single source file** |
 
 Each subagent is a thin stub in `.claude/agents/*.md` (the harness needs a flat file to
@@ -42,7 +48,13 @@ directory under `.claude/skills/<role>/`, which the agent loads as its first act
              tools only. It gets a URL and the product story, never the code. Its
              confusion is data. Findings come back as new GitHub issues.
 
-4. LOOP      Until the `ready` queue is dry. State lives in issue labels
+4. BREAK     Before the feature can reach `main`, it gets attacked: the hacker (red
+             team) breaks in with full code + the running app, the security engineer
+             (blue team) audits, hardens, and owns the verdict. Fixes carry regression
+             tests; the hacker re-attacks until nothing lands. No open critical or high
+             finding may reach `main`.
+
+5. LOOP      Until the `ready` queue is dry. State lives in issue labels
              (`ready → in-progress → in-review → blocked/done`), so any new
              orchestrator session recovers the full picture from `gh`.
 ```
@@ -52,7 +64,8 @@ directory under `.claude/skills/<role>/`, which the agent loads as its first act
 **Core layer** (portable, improves over time, travels to every project):
 
 - `plan-feature`, `orchestrate` — the two workflow playbooks
-- `backend-engineer`, `frontend-engineer`, `qa-engineer`, `reviewer`, `blind-tester` — role playbooks
+- `backend-engineer`, `frontend-engineer`, `qa-engineer`, `reviewer`, `hacker`,
+  `security-engineer`, `blind-tester` — role playbooks
 - Topical craft skills, named for what they are — `react`, `api-calls`, and whatever
   comes next. They grow through real project work: the owner reviews what agents do
   and tells the principal engineer what to add or remove.
