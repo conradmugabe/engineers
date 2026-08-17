@@ -39,9 +39,17 @@ If this is weak, say so here rather than downstream.>
 
 ## Personas and boundaries
 
-| Persona | Who they are | What they can do | What they must not reach |
-|---|---|---|---|
-| | | | |
+| Persona | Who they are | What they can do | What they must not reach | Conditional on |
+|---|---|---|---|---|
+| | | | | Unconditional \| `N1` (dormant) |
+
+**The "Conditional on" column is required, and it applies per capability, not only per row.**
+QA, the blind tester, the hacker and the security engineer read this table as the contract. A
+persona — or a single capability inside one — that exists only if a nice-to-have gets built
+reads to them as live work: they go looking for it, cannot produce it, and the natural repair
+is to build the missing capability, silently undoing the demotion. Mark a row `Unconditional`
+only when **every** capability in it is must-have; where one capability depends on something
+unscheduled, name that dependency next to the capability rather than at the end of the row.
 
 <Name every boundary, including the obvious ones. The test and security stages depend
 on this table. If the product genuinely has one undifferentiated user, say so explicitly.>
@@ -52,21 +60,28 @@ on this table. If the product genuinely has one undifferentiated user, say so ex
 its provenance. Stage 4 turns this into release phases, so a lazy sort here becomes a wrong
 roadmap there.>
 
+<**Give every row a stable id — `M1`, `N1`, `L1` — and use it everywhere else in the
+document.** This is not decoration. Scope gets restated in several places (the requirements
+table, the persona contract, the workflow defaults, Later phases, and prose), and when a
+capability is demoted, every one of those has to move with it. Ids are what let
+`scripts/check-brief.py` verify that mechanically instead of a reader catching it four
+rounds later. A brief written without them is not checkable.>
+
 ### Must have — the product is not worth shipping without it
 
 <Test applied to each: if everything else shipped and this did not, would anyone use it?
 State the one-sentence defence next to each item. An item that cannot be defended in one
 sentence does not belong in this table.>
 
-| Capability | Why it is a must | Provenance |
-|---|---|---|
-| | | |
+| Id | Capability | Why it is a must | Motivation | Provenance |
+|---|---|---|---|---|
+| M1 | | | Product / Fixture | |
 
 ### Nice to have — meaningfully better, but the product works without it
 
-| Capability | What it adds | Provenance |
-|---|---|---|
-| | | |
+| Id | Capability | What it adds | Provenance |
+|---|---|---|---|
+| N1 | | | |
 
 ### Polish — what makes it good rather than merely working
 
@@ -74,9 +89,25 @@ sentence does not belong in this table.>
 access, perceived speed, motion, consistency. Recorded and scheduled, never quietly
 discarded — "later" is only honest when later has a trigger.>
 
-| Item | What it is worth | Trigger / phase | Provenance |
-|---|---|---|---|
-| | | | |
+| Id | Item | What it is worth | Trigger / phase | Provenance |
+|---|---|---|---|---|
+| L1 | | | | |
+
+### Precedence — the rule that keeps every other section honest
+
+<State it once, and make it bind **every** place the document expresses scope, not just the
+requirements table. On the first real run this rule was written to cover one table; the
+demotions were propagated there and nowhere else, and the round after that a fix to one
+consumer falsified a sentence in another. Three clauses:>
+
+1. Nothing is scheduled earlier than the bucket of the capability it serves.
+2. No must-have depends on a non-must-have.
+3. Anything conditional on an unscheduled capability says so **where it is stated**, not
+   only in the sort.
+
+**Consumers of scope in this document** — every one has to move when a capability does:
+the requirements table's Phase column, the persona contract, the workflow defaults, Later
+phases, the non-goals, and any prose that schedules something.
 
 **Sort notes:** <Items whose bucket was contested, who wanted them where, and why the
 sort landed as it did. Also record anything demoted out of "must have" during the
@@ -101,7 +132,11 @@ failure that occurs without it. Anything real but not now goes to Later phases.>
 stakes, pricing shapes, compliance obligations. Each claim with its source.>
 
 ## Later phases
-<Real requirements deliberately deferred, so they are not rediscovered as surprises.>
+<Real requirements deliberately deferred, so they are not rediscovered as surprises.
+**Every entry names the bucket row it corresponds to** — `- Multi-device sync — N19.
+Trigger: …`. Deferring a capability is a schedule, not an exemption from the sort, and
+the id is what makes that checkable. An entry with no id sat in no bucket for three
+rounds on the first real run while the closure claim said otherwise.>
 
 ---
 

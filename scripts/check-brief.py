@@ -16,6 +16,21 @@ Two kinds of output, and the distinction matters:
   FLAG  — a heuristic that needs a reader. Never fails the build on its own, because a
           false positive that blocks a gate teaches everyone to skip the gate.
 
+Round 4 added checks 6 and 7, for the two defects that survived a critic and a judge and
+were caught by hand:
+
+  6. Every "Later phases" entry names a bucket row. A deferred capability is still a
+     capability; deferring it is a schedule, not an exemption from the sort. This is the
+     one that would have caught locale-aware date formatting three rounds earlier.
+  7. The persona table declares what each row is conditional on. The judge called this
+     inference "semantic" and left it with the critic — it is only semantic while the table
+     has nowhere to record the answer. Requiring the column makes it mechanical.
+
+Both were verified by reintroducing the original defect and confirming the check fires.
+That test found a bug in check 7 that reading it had not: the escape-hatch regex matched
+"Unconditional", swallowing the exact case the check exists to catch. **Write the check,
+then break the document on purpose to see it fire.**
+
 Usage:
     check-brief.py [path/to/00-brief.md]
     check-brief.py --strict path   # FLAGs also fail; use in a gate that has a human behind it
@@ -29,6 +44,22 @@ from pathlib import Path
 BUCKET_ROW = re.compile(r"^\|\s*(M|N|L)(\d+)\s*\|(.*)$")
 REQ_ROW = re.compile(r"^\|\s*\*{0,2}(R-\d+)\*{0,2}\s*\|(.*)$")
 ID_REF = re.compile(r"\b([MNL]\d+|R-\d+)\b")
+
+# Sections that state scope outside the three bucket tables. Each is a place a demotion has
+# to be propagated to, and each has gone stale at least once on this project.
+LATER_HEADING = re.compile(r"^#{2,3}\s+Later phases\b", re.I)
+HEADING = re.compile(r"^#{1,6}\s")
+# Bold is markdown style, not the property. Requiring it meant an unbolded entry
+# evaded the check entirely — it tested formatting and reported on scope.
+# Boundary on em/en dash only. An ASCII hyphen also lives inside names like
+# "Multi-device sync", and matching it truncated the name and lost the trailing id.
+LATER_ITEM = re.compile(r"^[-*]\s+\*{0,2}(?P<name>[^*\n]{3,}?)\*{0,2}\s*(?:[—–]|$)")
+
+# The persona table is the trust-boundary contract four downstream stages consume. A row
+# describing a persona that only exists if a nice-to-have is built will cause that
+# capability to be built — silently re-promoting it through a door stage 4 does not watch.
+PERSONA_HEADER = re.compile(r"^\|.*\bpersona\b.*\|.*must not reach.*\|", re.I)
+CONDITIONAL_COL = re.compile(r"conditional", re.I)
 
 # Prose that *schedules a capability*, outside a table, where it goes stale unnoticed.
 #
@@ -62,18 +93,53 @@ def keywords(text):
 def parse(path):
     lines = path.read_text(errors="replace").splitlines()
     buckets = {"M": {}, "N": {}, "L": {}}
+    all_rows = []
     reqs = {}
+    later = []
+    personas = {"found": False, "has_conditional_col": False, "col": None, "rows": []}
     in_table = False
+    in_later = False
+    persona_cols = None
 
     for i, line in enumerate(lines, start=1):
         stripped = line.strip()
         in_table = stripped.startswith("|")
 
+        # --- Later phases: every entry must name the bucket row it corresponds to -------
+        if LATER_HEADING.match(stripped):
+            in_later = True
+            continue
+        if in_later and HEADING.match(stripped):
+            in_later = False
+        if in_later:
+            m_later = LATER_ITEM.match(stripped)
+            if m_later:
+                later.append((i, m_later.group("name").strip(),
+                              ID_REF.findall(stripped)))
+
+        # --- Persona table: locate it, and whether it declares conditionality -----------
+        if PERSONA_HEADER.match(stripped):
+            personas["found"] = True
+            persona_cols = [c.strip() for c in stripped.strip("|").split("|")]
+            for idx, col in enumerate(persona_cols):
+                if CONDITIONAL_COL.search(col):
+                    personas["has_conditional_col"] = True
+                    personas["col"] = idx
+            continue
+        if persona_cols is not None:
+            if not stripped.startswith("|"):
+                persona_cols = None
+            elif not stripped.startswith("|---"):
+                parts = [c.strip() for c in stripped.strip("|").split("|")]
+                personas["rows"].append((i, parts))
+
         m = BUCKET_ROW.match(stripped)
         if m:
             kind, num, body = m.group(1), m.group(2), m.group(3)
             parts = cells(body)
-            buckets[kind][f"{kind}{num}"] = {
+            cid = f"{kind}{num}"
+            all_rows.append((cid, i))
+            buckets[kind][cid] = {
                 "line": i,
                 "name": parts[0] if parts else "",
                 "text": body,
@@ -96,7 +162,7 @@ def parse(path):
             reqs.setdefault("_prose", []).append((i, stripped))
 
     prose = reqs.pop("_prose", [])
-    return lines, buckets, reqs, prose
+    return lines, buckets, reqs, prose, later, personas, all_rows
 
 
 def main(argv):
@@ -107,7 +173,7 @@ def main(argv):
         print(f"error: {path} not found", file=sys.stderr)
         return 2
 
-    lines, buckets, reqs, prose = parse(path)
+    lines, buckets, reqs, prose, later, personas, all_rows = parse(path)
     fails, flags = [], []
 
     must, nice, polish = buckets["M"], buckets["N"], buckets["L"]
@@ -128,8 +194,10 @@ def main(argv):
                 f"stated counts {cm}/{cn}/{cl} do not match the tables "
                 f"{len(must)}/{len(nice)}/{len(polish)}"
             )
-    for claimed_pct in re.findall(r"(?:must-have is|Must-have is)\s*\*{0,2}(\d+)\s*%", body):
-        if abs(int(claimed_pct) - pct) > 0.6:
+    # `\s+` not a literal space: the brief wraps between "Must-have" and "is", and the
+    # limb silently matched nothing for four rounds. Substituting 88% still passed.
+    for claimed_pct in re.findall(r"[Mm]ust-have\s+is\s*\*{0,2}(\d+(?:\.\d+)?)\s*%", body):
+        if abs(float(claimed_pct) - pct) > 0.6:
             fails.append(f"stated must-have share {claimed_pct}% but tables give {pct:.1f}%")
 
     # --- 2. no must-have may depend on a non-must-have --------------------------------
@@ -190,14 +258,85 @@ def main(argv):
             f"three consecutive rounds; verify or soften it"
         )
 
-    # --- 6. duplicate ids --------------------------------------------------------------
+    # --- 6. every Later-phases entry maps to a bucket row -----------------------------
+    #
+    # Added round 4. "Locale-aware date formatting" sat in Later phases and in no bucket for
+    # three rounds while the closure sentence claimed every capability was placed — found by
+    # a critic reading carefully, which is exactly the work a check should be doing. A
+    # deferred capability is still a capability; deferring it is a schedule, not an exemption
+    # from the sort.
+    all_ids = {cid for kind in buckets for cid in buckets[kind]}
+    for line_no, name, refs in later:
+        if not refs:
+            flags.append(
+                f"line {line_no}: Later-phases entry \"{name[:48]}\" names no bucket id — "
+                f"a deferred capability still belongs in a bucket; write \"— N16\""
+            )
+            continue
+        for ref in refs:
+            if ref.startswith("R-"):
+                continue
+            if ref not in all_ids:
+                fails.append(
+                    f"line {line_no}: Later-phases entry \"{name[:48]}\" names {ref}, "
+                    f"which is not in any bucket table"
+                )
+
+    # --- 7. the persona contract declares what it is conditional on -------------------
+    #
+    # Added round 4, and the reason is worth stating. The judge found three persona rows
+    # whose existence depended on unscheduled nice-to-haves with nothing saying so, and
+    # called the inference "semantic" — something only a careful reader could catch. It is
+    # only semantic while the table has nowhere to put the answer. Requiring the column
+    # turns it mechanical: downstream stages read this table as the contract, and a persona
+    # they cannot produce is an instruction to build the missing capability, which silently
+    # undoes a demotion.
+    if personas["found"]:
+        if not personas["has_conditional_col"]:
+            flags.append(
+                "the persona table has no \"Conditional on\" column — it states scope, so "
+                "each row must say which capability it depends on, or a dormant persona "
+                "reads as live work"
+            )
+        else:
+            col = personas["col"]
+            for line_no, parts in personas["rows"]:
+                if col >= len(parts):
+                    continue
+                cond, rest = parts[col], " ".join(p for i, p in enumerate(parts) if i != col)
+                if not cond:
+                    flags.append(f"line {line_no}: persona row has an empty \"Conditional on\" cell")
+                    continue
+                for ref in ID_REF.findall(cond):
+                    if not ref.startswith("R-") and ref not in all_ids:
+                        fails.append(
+                            f"line {line_no}: persona row is conditional on {ref}, "
+                            f"which is not in any bucket table"
+                        )
+                # A row leaning on a nice/polish capability must be visibly conditional on it.
+                leaned = {r for r in ID_REF.findall(rest) if r.startswith(("N", "L"))}
+                declared = set(ID_REF.findall(cond))
+                undeclared = leaned - declared
+                # "Unconditional" contains "conditional" — an escape hatch that matched it
+                # would let the one cell this check exists to catch through. Found by
+                # testing the check against a reintroduced defect rather than by reading it.
+                hedged = re.sub(r"unconditional", "", cond, flags=re.I)
+                if undeclared and not re.search(r"dormant|unscheduled|conditional", hedged, re.I):
+                    flags.append(
+                        f"line {line_no}: persona row mentions {sorted(undeclared)} "
+                        f"(not must-have) but its \"Conditional on\" cell does not say so"
+                    )
+
+    # --- 8. duplicate ids --------------------------------------------------------------
     seen = defaultdict(list)
-    for kind in buckets:
-        for cid, row in buckets[kind].items():
-            seen[cid].append(row["line"])
-    for cid, where in seen.items():
+    for cid, line_no in all_rows:
+        seen[cid].append(line_no)
+    for cid, where in sorted(seen.items()):
         if len(where) > 1:
-            fails.append(f"duplicate id {cid} at lines {where}")
+            fails.append(
+                f"duplicate id {cid} at lines {where} — the later row silently replaced the "
+                f"earlier one, which also corrupts every count derived from these tables"
+            )
 
     # --- report ------------------------------------------------------------------------
     print(f"Brief consistency — {path}\n")

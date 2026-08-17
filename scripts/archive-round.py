@@ -19,6 +19,7 @@ Usage:
     archive-round.py [docs_dir] [slug]      # defaults: docs, 00-brief
 """
 
+import filecmp
 import re
 import shutil
 import sys
@@ -65,15 +66,23 @@ def main(argv):
     # unparseable verdict still gets preserved rather than silently skipped.
     n = round_of(verdict) or next_index(history)
 
-    moved = []
+    moved, skipped = [], []
     for src, kind in ((critique, "critique"), (verdict, "verdict")):
         if not src.is_file():
             continue
         dest = history / f"r{n}-{kind}.md"
         if dest.exists():
-            # Never overwrite an archive. That is the whole point of this script.
-            alt = next_index(history)
-            dest = history / f"r{alt}-{kind}.md"
+            if filecmp.cmp(str(src), str(dest), shallow=False):
+                # Already archived, unchanged. Re-running is a no-op, not a new round.
+                skipped.append(dest)
+                continue
+            # Same round number, different content — the round was re-run. Take the next
+            # free slot rather than overwriting, but never invent a round number for a file
+            # that is merely a duplicate: an earlier version of this script did exactly that
+            # and produced an "r5-verdict.md" that was byte-for-byte round 3's. A history
+            # with fabricated round numbers is worse than no history, because it is the
+            # artifact everything else is told to trust.
+            dest = history / f"r{next_index(history)}-{kind}.md"
         # Copy, never move. Moving looks tidier and is wrong: the frontier derives state
         # from the live paths, so emptying them turns a stage awaiting a decision into a
         # stage that was never critiqued. Archiving must be invisible to the state machine.
@@ -84,6 +93,8 @@ def main(argv):
 
     for m in moved:
         print(f"archived → {m}")
+    for s_ in skipped:
+        print(f"already archived, unchanged → {s_}")
     print(f"\n{len(moved)} file(s) archived; the live paths are untouched, so the frontier "
           f"still reads the current state.")
     return 0
