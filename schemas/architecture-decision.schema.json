@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "title": "Architecture Decision",
+  "type": "object",
+  "required": [
+    "id",
+    "decision",
+    "context",
+    "criteria",
+    "alternatives",
+    "selectedOption",
+    "consequences",
+    "status"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^ADR-[A-Z0-9-]+$"
+    },
+    "decision": {
+      "type": "string"
+    },
+    "context": {
+      "type": "string"
+    },
+    "criteria": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "alternatives": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "pros",
+          "cons"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "pros": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "score": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "selectedOption": {
+      "type": "string"
+    },
+    "rejectedReasons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "consequences": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "affectedArtifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "type": "string"
+    }
+  }
+}

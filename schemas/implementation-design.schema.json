@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "title": "Implementation Design",
+  "type": "object",
+  "required": [
+    "id",
+    "targetId",
+    "problem",
+    "acceptanceCriteria",
+    "approaches",
+    "selectedApproach",
+    "detailedDesign",
+    "testPlan",
+    "reviewStatus"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^TASK-DESIGN-[A-Z0-9-]+$"
+    },
+    "targetId": {
+      "type": "string"
+    },
+    "problem": {
+      "type": "string"
+    },
+    "acceptanceCriteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "approaches": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "description",
+          "pros",
+          "cons"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "pros": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "cons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "selectedApproach": {
+      "type": "string"
+    },
+    "detailedDesign": {
+      "type": "string"
+    },
+    "dataFlow": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "failureHandling": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "securityConsiderations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "testPlan": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "implementerNotes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "flexibility": {
+      "type": "string"
+    },
+    "reviewStatus": {
+      "enum": [
+        "DRAFT",
+        "PASS",
+        "REVISE",
+        "HUMAN_REQUIRED"
+      ]
+    }
+  }
+}

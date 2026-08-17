@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "title": "Requirement",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "statement",
+    "provenance",
+    "priority",
+    "releaseScope",
+    "acceptanceCriteria",
+    "status"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^REQ-[A-Z0-9-]+$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "statement": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provenance": {
+      "description": "CLIENT: explicitly supplied. RESEARCHED: evidenced, cite in evidenceRefs. INFERRED: concluded from established domain behaviour, rationale required. SYSTEM: the product cannot function without it. SECURITY: threat mitigation or access control. REGULATORY: required by law, policy, or platform rule. ASSUMED: nobody supplied it, a default was taken under the silence-is-consent rule — requires the assumption object.",
+      "enum": [
+        "CLIENT",
+        "RESEARCHED",
+        "INFERRED",
+        "SYSTEM",
+        "SECURITY",
+        "REGULATORY",
+        "ASSUMED"
+      ]
+    },
+    "assumption": {
+      "type": "object",
+      "description": "Required when provenance is ASSUMED. Records the default taken so silence remains auditable.",
+      "required": ["default", "costIfWrong"],
+      "additionalProperties": false,
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "The unanswered question this requirement rests on."
+        },
+        "default": {
+          "type": "string",
+          "description": "The decision taken in the absence of an answer."
+        },
+        "askedOn": {
+          "type": "string",
+          "format": "date"
+        },
+        "costIfWrong": {
+          "enum": ["LOW", "MODERATE", "STRUCTURAL"],
+          "description": "STRUCTURAL means dependent work is discarded rather than adjusted if the default is wrong."
+        },
+        "humanActionId": {
+          "type": "string",
+          "pattern": "^HACT-[A-Z0-9-]+$"
+        }
+      }
+    },
+    "upstream": {
+      "type": "array",
+      "description": "Artifact IDs this requirement derives from. Changing any of them marks this STALE.",
+      "items": { "type": "string" }
+    },
+    "downstream": {
+      "type": "array",
+      "description": "Artifact IDs derived from this requirement. Maintained by the traceability pass, not by hand.",
+      "items": { "type": "string" }
+    },
+    "rationale": {
+      "type": "string"
+    },
+    "priority": {
+      "description": "MUST_HAVE: the product is not worth shipping without it — if everything else shipped and this did not, nobody would use it. NICE_TO_HAVE: meaningfully better with it, but the product works and is worth using without it. POLISH: what separates a good product from one that merely works — does not change what the product does (onboarding, empty states, error copy, keyboard access, perceived speed, consistency). Polish is scheduled, never silently dropped; anything that changes what the product can do is a capability, not polish.",
+      "enum": [
+        "MUST_HAVE",
+        "NICE_TO_HAVE",
+        "POLISH"
+      ]
+    },
+    "releaseScope": {
+      "type": "string"
+    },
+    "actors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "acceptanceCriteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "securityNotes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "evidenceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "dependsOn": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "enum": [
+        "DRAFT",
+        "REVIEWING",
+        "APPROVED",
+        "STALE",
+        "BLOCKED",
+        "IMPLEMENTED",
+        "VERIFIED",
+        "SUPERSEDED"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "provenance": { "const": "ASSUMED" } },
+        "required": ["provenance"]
+      },
+      "then": { "required": ["assumption"] }
+    },
+    {
+      "if": {
+        "properties": { "provenance": { "const": "RESEARCHED" } },
+        "required": ["provenance"]
+      },
+      "then": {
+        "required": ["evidenceRefs"],
+        "properties": { "evidenceRefs": { "minItems": 1 } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "provenance": { "const": "INFERRED" } },
+        "required": ["provenance"]
+      },
+      "then": { "required": ["rationale"] }
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "title": "Human Action",
+  "type": "object",
+  "required": [
+    "id",
+    "project",
+    "title",
+    "reason",
+    "blocking",
+    "steps",
+    "resumeSignal",
+    "status"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^HACT-[A-Z0-9-]+$"
+    },
+    "project": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "blocking": {
+      "type": "boolean"
+    },
+    "blockingScope": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "secretNames": {
+      "type": "array",
+      "description": "Names only; never secret values.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "affectedArtifacts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "resumeSignal": {
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "OPEN",
+        "COMPLETED",
+        "CANCELLED"
+      ]
+    }
+  }
+}
