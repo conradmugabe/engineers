@@ -30,10 +30,13 @@ claim (atomic, on disk)
 before it touches anything. An agent with a shell and a token that wanders into the wrong
 repository is the failure with no undo.
 
-**Claims are a local file lock.** `O_CREAT|O_EXCL` is atomic; GitHub has no compare-and-swap,
-so the read-then-label pattern races and two workers build the same issue. The lock is
-authoritative, the label is a mirror. Locks heartbeat, so a dead worker releases its issue
-instead of parking it forever.
+**Only the supervisor picks issues.** Workers never choose; each is handed one before it
+starts. There is no race over a queue that exactly one thread reads. Dispatch is a single
+pass — select, record, label on GitHub, then spawn — so what you see on GitHub is true from
+the moment it is true. If the label fails, the issue is not built.
+
+**One supervisor per workspace**, enforced by a pidfile. Two supervisors is the only real
+contention left, and it is what a second terminal gets you.
 
 **One worktree per worker.** Not a convention — a structural impossibility of the failure
 where agents run `git stash` and `git reset --hard` on each other.

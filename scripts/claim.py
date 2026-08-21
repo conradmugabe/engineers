@@ -69,7 +69,7 @@ def is_stale(rec, ttl: int) -> bool:
     return not (isinstance(pid, int) and pid_alive(pid))
 
 
-def acquire(root, issue, worker, ttl):
+def acquire(root, issue, worker, ttl, quiet=True):
     p = lock_path(root, issue)
     rec = {"issue": issue, "worker": worker, "pid": os.getpid(),
            "claimed_at": time.time(), "heartbeat": time.time()}
@@ -81,7 +81,7 @@ def acquire(root, issue, worker, ttl):
         existing = read_lock(p)
         if not is_stale(existing, ttl):
             holder = (existing or {}).get("worker", "unknown")
-            print(f"issue {issue} is held by {holder}", file=sys.stderr)
+            if not quiet: print(f"issue {issue} is held by {holder}", file=sys.stderr)
             return 1
         # Stale. Steal it by replacing the file atomically via rename, so a third worker
         # racing us here sees either the old lock or ours — never a half-written file.
@@ -90,15 +90,16 @@ def acquire(root, issue, worker, ttl):
         os.replace(tmp, p)
         after = read_lock(p)
         if not after or after.get("pid") != os.getpid():
-            print(f"issue {issue} was stolen from under us", file=sys.stderr)
+            if not quiet: print(f"issue {issue} was stolen from under us", file=sys.stderr)
             return 1
-        print(f"claimed {issue} (reclaimed a stale lock held by "
-              f"{(existing or {}).get('worker', '?')})")
+        if not quiet:
+            print(f"claimed {issue} (reclaimed a stale lock held by "
+                  f"{(existing or {}).get('worker', '?')})")
         return 0
 
     with os.fdopen(fd, "wb") as fh:
         fh.write(payload)
-    print(f"claimed {issue}")
+    if not quiet: print(f"claimed {issue}")
     return 0
 
 
@@ -118,19 +119,19 @@ def heartbeat(root, issue, worker):
     return 0
 
 
-def release(root, issue, worker):
+def release(root, issue, worker, quiet=True):
     p = lock_path(root, issue)
     rec = read_lock(p)
     if rec and rec.get("worker") != worker:
         # Refuse to release someone else's claim — that is how two workers end up on one
         # issue with neither of them holding it.
-        print(f"refusing: {issue} is held by {rec.get('worker')}, not {worker}", file=sys.stderr)
+        if not quiet: print(f"refusing: {issue} is held by {rec.get('worker')}, not {worker}", file=sys.stderr)
         return 1
     try:
         p.unlink()
     except FileNotFoundError:
         pass
-    print(f"released {issue}")
+    if not quiet: print(f"released {issue}")
     return 0
 
 
@@ -151,14 +152,14 @@ def list_claims(root):
     return 0
 
 
-def reap(root, ttl):
+def reap(root, ttl, quiet=True):
     freed = []
     for p in sorted(claims_dir(root).glob("*.json")):
         rec = read_lock(p)
         if is_stale(rec, ttl):
             freed.append((rec or {}).get("issue", p.stem))
             p.unlink(missing_ok=True)
-    print(f"reaped {len(freed)} stale claim(s)" + (f": {', '.join(map(str, freed))}" if freed else ""))
+    if not quiet: print(f"reaped {len(freed)} stale claim(s)" + (f": {', '.join(map(str, freed))}" if freed else ""))
     return 0
 
 
@@ -175,11 +176,11 @@ def main(argv):
         ap.error(f"{a.action} needs an issue number")
 
     return {
-        "acquire": lambda: acquire(a.root, a.issue, a.worker, a.ttl),
+        "acquire": lambda: acquire(a.root, a.issue, a.worker, a.ttl, quiet=False),
         "heartbeat": lambda: heartbeat(a.root, a.issue, a.worker),
-        "release": lambda: release(a.root, a.issue, a.worker),
+        "release": lambda: release(a.root, a.issue, a.worker, quiet=False),
         "list": lambda: list_claims(a.root),
-        "reap": lambda: reap(a.root, a.ttl),
+        "reap": lambda: reap(a.root, a.ttl, quiet=False),
     }[a.action]()
 
 

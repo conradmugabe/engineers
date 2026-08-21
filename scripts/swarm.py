@@ -7,7 +7,18 @@
 
 One process on your machine. It polls the repository for actionable issues, keeps N workers
 busy, and restarts the ones that die. Each worker gets its own git worktree and its own
-headless Claude, claims an issue atomically, and builds it.
+headless Claude.
+
+**Only the supervisor picks issues.** Workers never choose; they are handed one. That single
+fact removes the race rather than managing it — you cannot have contention over a queue that
+exactly one thread reads. Dispatch is one pass: select the free issues, label them on GitHub,
+record them in the ledger, then spawn. A worker that starts already knows its issue and never
+looks at the queue.
+
+The only genuine race left is two supervisors on one workspace — two terminals, or a leftover
+process you forgot. That is what the supervisor lock below is for, and it is the whole of the
+concurrency control. The per-issue ledger is no longer contention control; it is the in-flight
+record, so `status` can tell you what is running and a crash can be recovered from.
 
 **A run is bound to exactly one repository.** The bound repo is written to .swarm/config.json
 and every worker re-checks it before touching anything. This is a hard constraint, not a
@@ -29,6 +40,12 @@ import threading
 import time
 from pathlib import Path
 
+# The ledger is a function call, not a subprocess. Spawning a Python interpreter per issue
+# per poll cycle is precisely the "no slow commands inside the loop" rule this project puts
+# on its own workers, and it also made the dispatch logic impossible to test in-process.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import claim  # noqa: E402
+
 HEARTBEAT_SECONDS = 60
 POLL_SECONDS = 30
 READY_LABEL = "ready"
@@ -45,6 +62,55 @@ def log(worker, msg):
 
 
 # ---------------------------------------------------------------- repo binding
+
+def pid_alive(pid: int) -> bool:
+    """A pid owned by another user raises PermissionError, not ProcessLookupError — which
+    means it exists. Getting this backwards makes a live supervisor look dead and lets a
+    second one start, which is the exact race the lock is here to prevent."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def acquire_supervisor_lock(workdir: Path):
+    """One supervisor per workspace. This is the only real race in the system.
+
+    Workers cannot collide because they never select. Two supervisors can: both read the same
+    queue, both take the first three issues, both spawn. A pidfile created with O_EXCL settles
+    it, and a stale one (process gone) is taken over rather than blocking forever.
+    """
+    p = swarm_root(workdir) / "supervisor.pid"
+    try:
+        fd = os.open(p, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+    except FileExistsError:
+        try:
+            other = int(p.read_text().split()[0])
+        except (OSError, ValueError, IndexError):
+            other = None
+        if other and other != os.getpid() and pid_alive(other):
+            raise SystemExit(
+                f"error: a supervisor is already running for {workdir} (pid {other}).\n"
+                f"Two supervisors would both read the same queue and dispatch the same "
+                f"issues. Stop that one, or use a different --workdir."
+            )
+        p.write_text(f"{os.getpid()} {time.time()}\n")
+        return p
+    with os.fdopen(fd, "w") as fh:
+        fh.write(f"{os.getpid()} {time.time()}\n")
+    return p
+
+
+def release_supervisor_lock(p: Path):
+    try:
+        if p.exists() and p.read_text().split()[0] == str(os.getpid()):
+            p.unlink()
+    except (OSError, IndexError):
+        pass
+
 
 def swarm_root(workdir: Path) -> Path:
     d = workdir / ".swarm"
@@ -116,6 +182,47 @@ def actionable_issues(repo: str, label: str):
 
 # ---------------------------------------------------------------- worker
 
+def dispatch(repo, workdir, repo_dir, free, label, claim_ttl):
+    """Select up to `free` issues and hand them out. The only place issues are chosen.
+
+    Single-threaded by construction, so the selection needs no locking of its own. Each issue
+    is recorded in the ledger and labelled on GitHub *before* a worker exists for it, so what
+    you see on GitHub is true from the moment it is true, rather than a mirror written
+    afterwards by whoever won a race.
+    """
+    claim.reap(str(workdir), claim_ttl)
+
+    in_flight = {p.stem for p in (workdir / ".swarm" / "claims").glob("*.json")}
+    queue = [i for i in actionable_issues(repo, label) if str(i["number"]) not in in_flight]
+
+    assigned, slot = [], 0
+    for issue in queue:
+        if len(assigned) >= free:
+            break
+        slot += 1
+        name = f"w{slot}"
+        n = str(issue["number"])
+
+        if claim.acquire(str(workdir), n, name, claim_ttl) != 0:
+            # Should not happen — nothing else selects. If it does, something is wrong with
+            # our assumptions rather than with this issue, so say so loudly.
+            log("supervisor", f"unexpected: #{n} is already in the ledger — nothing else "
+                              f"should be selecting issues")
+            continue
+
+        lr = sh("gh", "issue", "edit", n, "--repo", repo,
+                "--add-label", WORKING_LABEL, "--remove-label", label)
+        if lr.returncode != 0:
+            # If we cannot mark it taken, do not build it: a second run of the supervisor,
+            # or you looking at GitHub, would both see it as free.
+            log("supervisor", f"#{n} skipped — could not label it: {lr.stderr.strip()}")
+            claim.release(str(workdir), n, name)
+            continue
+
+        assigned.append((name, issue))
+    return assigned
+
+
 class Worker(threading.Thread):
     def __init__(self, name, workdir, repo, repo_dir, base_branch, issue, claim_ttl,
                  permission_mode, model, stop_event):
@@ -128,21 +235,14 @@ class Worker(threading.Thread):
         self.outcome = None
         self.proc = None
 
-    # ---- claim lifecycle
-    def _claim(self):
-        r = sh(sys.executable, str(Path(__file__).parent / "claim.py"), "acquire",
-               str(self.issue["number"]), "--worker", self.name,
-               "--root", str(self.workdir), "--ttl", str(self.claim_ttl))
-        return r.returncode == 0
-
+    # ---- ledger lifecycle. The supervisor acquired the entry; this worker only keeps it
+    # warm while it runs and drops it when finished. It never selects and never claims.
     def _release(self):
-        sh(sys.executable, str(Path(__file__).parent / "claim.py"), "release",
-           str(self.issue["number"]), "--worker", self.name, "--root", str(self.workdir))
+        claim.release(str(self.workdir), str(self.issue["number"]), self.name)
 
     def _heartbeat_loop(self):
         while not self.stop_event.is_set() and self.proc and self.proc.poll() is None:
-            sh(sys.executable, str(Path(__file__).parent / "claim.py"), "heartbeat",
-               str(self.issue["number"]), "--worker", self.name, "--root", str(self.workdir))
+            claim.heartbeat(str(self.workdir), str(self.issue["number"]), self.name)
             self.stop_event.wait(HEARTBEAT_SECONDS)
 
     # ---- worktree
@@ -162,13 +262,8 @@ class Worker(threading.Thread):
 
     def run(self):
         n = self.issue["number"]
-        if not self._claim():
-            self.outcome = "not-claimed"
-            return
         threading.Thread(target=self._heartbeat_loop, daemon=True).start()
         try:
-            sh("gh", "issue", "edit", str(n), "--repo", self.repo,
-               "--add-label", WORKING_LABEL, "--remove-label", READY_LABEL)
             branch = f"swarm/{n}"
             wt = self._worktree(branch)
             if wt is None:
@@ -214,6 +309,7 @@ def run(args):
     workdir = Path(args.workdir).resolve()
     workdir.mkdir(parents=True, exist_ok=True)
     bind_repo(workdir, args.repo)
+    lock = acquire_supervisor_lock(workdir)
     repo_dir = ensure_clone(workdir, args.repo)
     base = default_branch(repo_dir)
     log("supervisor", f"bound to {args.repo} (base branch {base}), {args.workers} worker(s)")
@@ -234,13 +330,10 @@ def run(args):
 
         free = args.workers - len(active)
         if free > 0:
-            sh(sys.executable, str(Path(__file__).parent / "claim.py"), "reap",
-               "--root", str(workdir), "--ttl", str(args.claim_ttl))
-            queue = actionable_issues(args.repo, args.label)
-            held = {p.stem for p in (workdir / ".swarm" / "claims").glob("*.json")}
-            queue = [i for i in queue if str(i["number"]) not in held]
+            assigned = dispatch(args.repo, workdir, repo_dir, free, args.label,
+                                args.claim_ttl)
 
-            if not queue and not active:
+            if not assigned and not active:
                 idle_polls += 1
                 if args.once:
                     log("supervisor", "queue empty — exiting (--once)")
@@ -250,10 +343,13 @@ def run(args):
             else:
                 idle_polls = 0
 
-            for issue in queue[:free]:
-                name = next(f"w{i}" for i in range(1, args.workers + 1)
-                            if f"w{i}" not in active)
+            if assigned:
                 sh("git", "-C", str(repo_dir), "fetch", "--quiet", "origin")
+            for name, issue in assigned:
+                # Names come from dispatch, but a slot may still be busy; take the first free.
+                if name in active:
+                    name = next((f"w{i}" for i in range(1, args.workers + 1)
+                                 if f"w{i}" not in active), name)
                 w = Worker(name, workdir, args.repo, repo_dir, base, issue,
                            args.claim_ttl, args.permission_mode, args.model, stop)
                 active[name] = w
@@ -263,6 +359,7 @@ def run(args):
 
     for w in active.values():
         w.join(timeout=args.grace)
+    release_supervisor_lock(lock)
     log("supervisor", "stopped")
     return 0
 
@@ -276,9 +373,7 @@ def status(args):
     cfg = json.loads(cfg_path.read_text())
     print(f"workspace : {workdir}")
     print(f"bound to  : {cfg['repo']}\n")
-    sh_out = sh(sys.executable, str(Path(__file__).parent / "claim.py"), "list",
-                "--root", str(workdir)).stdout
-    print(sh_out.rstrip())
+    claim.list_claims(str(workdir))
     queue = actionable_issues(cfg["repo"], args.label)
     print(f"\n{len(queue)} issue(s) ready and unclaimed")
     for i in queue[:10]:

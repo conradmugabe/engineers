@@ -31,12 +31,33 @@ you:     swarm run --repo owner/name --workers 10
 
 ## The five decisions that matter
 
-**1. Claiming is a local file lock, not a GitHub label.** Every worker runs on your one
-machine, so `O_CREAT|O_EXCL` gives real atomicity for free. GitHub has no compare-and-swap:
-a read-then-label pattern races, and two workers both "successfully" claim the same issue.
-The lock is authoritative; the GitHub label is a mirror for your visibility, written after
-the lock is held. Locks carry a heartbeat, so a worker that dies releases its issue rather
-than parking it forever.
+**1. Only the supervisor picks issues. Workers are handed one.**
+
+This is the decision that removes the race instead of managing it. There is no contention
+over a queue that exactly one thread reads, so no worker ever needs to ask whether an issue
+is taken — it is told which issue is its own before it starts.
+
+Dispatch is one pass, single-threaded: select the free issues, record them in the ledger,
+label them on GitHub, then spawn. Because the label is written *before* a worker exists, what
+you see on GitHub is true from the moment it is true, rather than a mirror written afterwards
+by whoever won a race. If the label call fails, the issue is not built and its ledger entry is
+rolled back — an issue we cannot mark as taken is one a second run would pick up again.
+
+The alternative — every worker polls, picks something that looks free, and labels it — races
+badly. GitHub has no compare-and-swap, so two workers both see an issue unlabelled, both label
+it, both build it, and you pay twice and merge once.
+
+**The only genuine race left is two supervisors** on one workspace: two terminals, or a
+leftover process. A pidfile created with `O_CREAT|O_EXCL` settles that, and it is the whole of
+the concurrency control. A stale pidfile whose process is gone is taken over rather than
+blocking forever — and note that a pid owned by another user raises `PermissionError` rather
+than `ProcessLookupError`, so getting that check backwards makes a live supervisor look dead
+and lets a second one start.
+
+**The per-issue ledger is not contention control.** It is the in-flight record: what is
+running, under which worker, since when. It answers `status`, and it survives a crash so the
+next run knows what was mid-flight. Entries heartbeat, so a worker killed mid-issue frees it
+instead of parking it forever.
 
 **2. One worktree per worker.** From the Bun rewrite: agents sharing a working tree ran
 `git stash` and `git reset --hard` on each other within two minutes. Worktrees make that
