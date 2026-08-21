@@ -57,6 +57,13 @@ workaround is fine, the code is wrong — fix the code.
 **A failed issue is labelled `blocked`, not returned to the queue.** An issue that retries
 forever burns tokens forever.
 
+**Merged work has its worktree deleted; failed work keeps it.** That makes peak disk
+`workers x tree` instead of something that grows all night, which is the only reason the
+`--min-free-gb` floor means anything. The merge is verified against the remote first — a
+worker that believes it merged and did not is the one case where cleanup destroys real work.
+A failure keeps its tree because the transcript says what the worker thought and the tree is
+the only place the state that broke it still exists.
+
 ## Concurrency is a spend dial
 
 `--workers` is a cost decision, not a throughput one. The Bun rewrite ran 64 agents at once

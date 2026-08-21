@@ -84,8 +84,30 @@ no stake in it.
 - **No stubbing to make it pass.** Asked to make things compile, agents stub the failing
   function out. The rule that fixed it: *if you need a paragraph-long comment to justify why
   the workaround is fine, the code is wrong — fix the code.*
-- **Resource limits are not optional.** Their machine ran out of disk and crashed repeatedly
-  at high concurrency. Workers run under a cgroup with a memory and disk ceiling.
+- **Resource limits are not optional, and they are two problems, not one.** Their machine ran
+  out of disk and crashed repeatedly at high concurrency, and separately their debug-build
+  tests blew past time limits.
+
+  A **cgroup** boxes a process and everything it spawns under hard memory, CPU and
+  process-count ceilings, so a runaway worker is killed by the kernel instead of competing
+  with the whole machine. That matters most when nobody is watching: without a ceiling the
+  OOM killer picks a victim at random at 3am, and it might be the supervisor.
+
+  **Cgroups do not limit disk space** — the v2 `io` controller caps bandwidth, not capacity.
+  Disk needs a different answer, and this design spends it hard: every worker gets its own
+  checkout and runs the project's own install inside it, so ten workers on a Node project is
+  five to ten gigabytes before anything is built.
+
+  The answer is to make the number bounded and then check it. **A worktree is removed as soon
+  as its issue is verified merged**, so peak usage is `workers x tree` — a constant, whatever
+  the throughput. Without that it grows all night and any preflight number is stale within the
+  hour. A floor (`--min-free-gb`) refuses to start below it and pauses dispatch if it is
+  crossed mid-run: pausing costs throughput, filling the disk costs the machine.
+
+  **Failure keeps its worktree.** The transcript records what the worker thought; the tree is
+  the only place the state that broke it still exists. And "merged" is verified against the
+  remote rather than taken from the worker's report — a worker that believes it merged and did
+  not is the one case where cleaning up destroys real work.
 - **Cost is real.** Their 11-day rewrite cost roughly $165,000 at API pricing. Concurrency is
   a spend dial, which is why it is a flag rather than a constant.
 

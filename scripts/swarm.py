@@ -182,6 +182,58 @@ def actionable_issues(repo: str, label: str):
 
 # ---------------------------------------------------------------- worker
 
+def free_gb(path: Path) -> float:
+    st = os.statvfs(path)
+    return st.f_bavail * st.f_frsize / 1e9
+
+
+def worktree_cost_gb(repo_dir: Path) -> float:
+    """What one worker's tree costs, measured rather than guessed.
+
+    The checkout itself is usually small; the expensive part is whatever the project's own
+    install puts there. Measuring the repo gives a floor, not the truth, so callers treat it
+    as a lower bound and keep headroom.
+    """
+    total = 0
+    for root, dirs, files in os.walk(repo_dir):
+        if ".git" in dirs:
+            dirs.remove(".git")
+        for f in files:
+            try:
+                total += os.path.getsize(os.path.join(root, f))
+            except OSError:
+                pass
+    return total / 1e9
+
+
+def merge_landed(repo_dir: Path, branch: str, base: str) -> bool:
+    """Did this branch actually reach the base branch on the remote?
+
+    Asked before deleting anything. A worker that believes it merged and did not is the one
+    case where cleaning up destroys real work, so this checks the remote rather than trusting
+    the worker's own report. A squash-merge leaves no ancestry, so the branch being gone from
+    the remote is also accepted as evidence it was merged and deleted.
+    """
+    sh("git", "-C", str(repo_dir), "fetch", "--quiet", "--prune", "origin")
+    merged = sh("git", "-C", str(repo_dir), "branch", "-r", "--merged", f"origin/{base}")
+    if f"origin/{branch}" in merged.stdout:
+        return True
+    still_there = sh("git", "-C", str(repo_dir), "ls-remote", "--heads", "origin", branch)
+    return still_there.returncode == 0 and not still_there.stdout.strip()
+
+
+def remove_worktree(repo_dir: Path, wt: Path, branch: str):
+    """Remove a worktree and its local branch, properly.
+
+    `rm -rf` alone leaves administrative files under .git/worktrees, and the next
+    `worktree add` on that path fails with a stale-lock error nobody enjoys diagnosing.
+    """
+    sh("git", "-C", str(repo_dir), "worktree", "remove", "--force", str(wt))
+    shutil.rmtree(wt, ignore_errors=True)
+    sh("git", "-C", str(repo_dir), "worktree", "prune")
+    sh("git", "-C", str(repo_dir), "branch", "-D", branch)
+
+
 def dispatch(repo, workdir, repo_dir, free, label, claim_ttl):
     """Select up to `free` issues and hand them out. The only place issues are chosen.
 
@@ -292,13 +344,27 @@ class Worker(threading.Thread):
 
             # The worker owns the outcome label; a failure goes back to the queue only
             # after a human looks, because an issue that fails forever burns tokens forever.
+            if code == 0 and merge_landed(self.repo_dir, branch, self.base_branch):
+                remove_worktree(self.repo_dir, wt, branch)
+                log(self.name, f"#{n} merged — worktree removed, "
+                               f"{free_gb(self.workdir):.1f}GB free")
+            elif code == 0:
+                # It exited clean but nothing reached the base branch. Keep the tree: this is
+                # the case where deleting would destroy the only copy of real work.
+                self.outcome = "merge-not-found"
+                log(self.name, f"#{n} exited clean but no merge landed — keeping {wt}")
+
             if code != 0:
+                # Failure keeps its worktree on purpose. The transcript says what the worker
+                # thought; the tree is the only place the state that broke it still exists.
+                log(self.name, f"#{n} failed — worktree kept for diagnosis at {wt}")
                 sh("gh", "issue", "edit", str(n), "--repo", self.repo,
                    "--add-label", "blocked", "--remove-label", WORKING_LABEL)
                 sh("gh", "issue", "comment", str(n), "--repo", self.repo, "--body",
                    f"Swarm worker `{self.name}` could not complete this issue "
-                   f"(exit {code}). Transcript: `{transcript.name}`. Labelled `blocked` "
-                   f"rather than returned to `ready`, so it does not retry forever.")
+                   f"(exit {code}). Transcript: `{transcript.name}`. Worktree kept at "
+                   f"`{wt}` for diagnosis. Labelled `blocked` rather than returned to "
+                   f"`ready`, so it does not retry forever.")
         finally:
             self._release()
 
@@ -312,6 +378,30 @@ def run(args):
     lock = acquire_supervisor_lock(workdir)
     repo_dir = ensure_clone(workdir, args.repo)
     base = default_branch(repo_dir)
+
+    # Disk is the one resource a cgroup will not protect: the v2 io controller caps
+    # bandwidth, not capacity. And it is the resource this design spends hardest, because
+    # every worker gets its own checkout and runs the project's own install in it.
+    #
+    # Cleaning up on merge makes the ceiling `workers x tree`, a constant rather than
+    # something that grows all night — which is the only reason a number checked here is
+    # still true an hour later.
+    avail = free_gb(workdir)
+    per_worker = max(worktree_cost_gb(repo_dir), 0.05)
+    projected = per_worker * args.workers
+    log("supervisor", f"disk: {avail:.1f}GB free, ~{per_worker:.2f}GB per worktree, "
+                      f"~{projected:.1f}GB for {args.workers} worker(s)")
+    if avail < args.min_free_gb:
+        raise SystemExit(
+            f"error: {avail:.1f}GB free is below the {args.min_free_gb}GB floor.\n"
+            f"Free space or lower --min-free-gb, but understand what you are choosing: "
+            f"filling the disk does not fail one issue, it takes the machine down."
+        )
+    if projected > avail - args.min_free_gb:
+        safe = max(1, int((avail - args.min_free_gb) / per_worker))
+        log("supervisor", f"warning: {args.workers} workers may not fit. "
+                          f"~{safe} would sit inside the floor. Install size is measured "
+                          f"from the repo and is a lower bound — dependencies land later.")
     log("supervisor", f"bound to {args.repo} (base branch {base}), {args.workers} worker(s)")
 
     stop = threading.Event()
@@ -327,6 +417,14 @@ def run(args):
         for name, w in list(active.items()):
             if not w.is_alive():
                 active.pop(name)
+
+        # Pausing costs throughput; filling the disk costs the machine.
+        if free_gb(workdir) < args.min_free_gb:
+            log("supervisor", f"paused — {free_gb(workdir):.1f}GB free is under the "
+                              f"{args.min_free_gb}GB floor. Waiting for workers to finish "
+                              f"and release their trees.")
+            stop.wait(POLL_SECONDS)
+            continue
 
         free = args.workers - len(active)
         if free > 0:
@@ -400,6 +498,9 @@ def main(argv):
     r.add_argument("--claim-ttl", type=int, default=900)
     r.add_argument("--grace", type=int, default=120)
     r.add_argument("--once", action="store_true", help="drain the queue and exit")
+    r.add_argument("--min-free-gb", type=float, default=10.0,
+                   help="stop dispatching below this much free disk. Cgroups cap memory "
+                        "and CPU but not capacity, so this is the only guard there is.")
 
     common(sub.add_parser("status", help="what is claimed and what is waiting"))
 
