@@ -182,6 +182,56 @@ def actionable_issues(repo: str, label: str):
 
 # ---------------------------------------------------------------- worker
 
+def available_ram_gb() -> float:
+    """Free-plus-reclaimable, which is what a new process can actually get."""
+    try:
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) / 1e6
+    except OSError:
+        pass
+    return 0.0
+
+
+def cgroup_available() -> bool:
+    """Can we box a worker? Needs cgroup v2 with memory delegated to this user."""
+    if not shutil.which("systemd-run"):
+        return False
+    try:
+        controllers = Path(
+            f"/sys/fs/cgroup/user.slice/user-{os.getuid()}.slice/cgroup.controllers"
+        ).read_text().split()
+        return "memory" in controllers
+    except OSError:
+        return False
+
+
+def wrap_in_cgroup(cmd, name, memory_max, cpu_quota, tasks_max):
+    """Box a worker so a runaway one dies alone.
+
+    Disk was the loud problem; memory is the quiet one. A test that never terminates, a model
+    that retries forever, a build that allocates without bound — unchecked, any of these
+    competes with the whole machine, and at 3am the kernel's OOM killer picks a victim at
+    random. It might pick the supervisor, and then the swarm is dead and nothing says so.
+
+    Inside a cgroup, that worker is killed and nothing else notices. It exits non-zero, which
+    the swarm already treats as a failure: the issue is labelled `blocked` and its worktree is
+    kept, so the evidence survives.
+
+    A scope covers the process and everything it spawns, which is the point — the build and
+    the test runner are where the memory actually goes, not in the agent itself.
+    """
+    return [
+        "systemd-run", "--user", "--scope", "--quiet",
+        f"--unit=swarm-{name}-{os.getpid()}",
+        "-p", f"MemoryMax={memory_max}",
+        "-p", f"MemorySwapMax=0",       # swapping instead of dying is how a machine locks up
+        "-p", f"CPUQuota={cpu_quota}",
+        "-p", f"TasksMax={tasks_max}",
+        "--", *cmd,
+    ]
+
+
 def free_gb(path: Path) -> float:
     st = os.statvfs(path)
     return st.f_bavail * st.f_frsize / 1e9
@@ -277,13 +327,14 @@ def dispatch(repo, workdir, repo_dir, free, label, claim_ttl):
 
 class Worker(threading.Thread):
     def __init__(self, name, workdir, repo, repo_dir, base_branch, issue, claim_ttl,
-                 permission_mode, model, stop_event):
+                 permission_mode, model, stop_event, limits=None):
         super().__init__(daemon=True)
         self.name, self.workdir, self.repo = name, workdir, repo
         self.repo_dir, self.base_branch = repo_dir, base_branch
         self.issue, self.claim_ttl = issue, claim_ttl
         self.permission_mode, self.model = permission_mode, model
         self.stop_event = stop_event
+        self.limits = limits
         self.outcome = None
         self.proc = None
 
@@ -327,6 +378,8 @@ class Worker(threading.Thread):
                    "--permission-mode", self.permission_mode]
             if self.model:
                 cmd += ["--model", self.model]
+            if self.limits:
+                cmd = wrap_in_cgroup(cmd, self.name, **self.limits)
             env = {**os.environ, "SWARM_WORKER": self.name, "SWARM_REPO": self.repo,
                    "SWARM_ISSUE": str(n), "SWARM_BRANCH": branch,
                    "SWARM_BASE": self.base_branch}
@@ -397,6 +450,27 @@ def run(args):
             f"Free space or lower --min-free-gb, but understand what you are choosing: "
             f"filling the disk does not fail one issue, it takes the machine down."
         )
+    ram = available_ram_gb()
+    limits = None
+    if args.no_limits:
+        log("supervisor", "warning: --no-limits — a runaway worker can take the machine "
+                          "down, and nobody is watching")
+    elif not cgroup_available():
+        log("supervisor", "warning: no cgroup v2 with delegated memory (needs systemd-run). "
+                          "Workers run unboxed; a runaway one competes with everything else.")
+    else:
+        mem = args.memory_max or f"{max(2.0, (ram - 4) / max(args.workers, 1)):.1f}G"
+        limits = {"memory_max": mem,
+                  "cpu_quota": args.cpu_quota or f"{max(100, int(os.cpu_count() / max(args.workers, 1)) * 100)}%",
+                  "tasks_max": args.tasks_max}
+        log("supervisor", f"ram: {ram:.1f}GB available; each worker boxed at "
+                          f"{limits['memory_max']} / {limits['cpu_quota']} cpu")
+        headroom = ram - 4
+        if float(mem.rstrip("G")) * args.workers > headroom:
+            log("supervisor", f"warning: {args.workers} x {mem} exceeds {headroom:.1f}GB of "
+                              f"headroom. They will not all peak at once, but if they do the "
+                              f"kernel starts killing workers.")
+
     if projected > avail - args.min_free_gb:
         safe = max(1, int((avail - args.min_free_gb) / per_worker))
         log("supervisor", f"warning: {args.workers} workers may not fit. "
@@ -449,7 +523,7 @@ def run(args):
                     name = next((f"w{i}" for i in range(1, args.workers + 1)
                                  if f"w{i}" not in active), name)
                 w = Worker(name, workdir, args.repo, repo_dir, base, issue,
-                           args.claim_ttl, args.permission_mode, args.model, stop)
+                           args.claim_ttl, args.permission_mode, args.model, stop, limits)
                 active[name] = w
                 w.start()
 
@@ -498,6 +572,13 @@ def main(argv):
     r.add_argument("--claim-ttl", type=int, default=900)
     r.add_argument("--grace", type=int, default=120)
     r.add_argument("--once", action="store_true", help="drain the queue and exit")
+    r.add_argument("--memory-max", default=None,
+                   help="per-worker memory ceiling, e.g. 3G. Default: headroom / workers.")
+    r.add_argument("--cpu-quota", default=None,
+                   help="per-worker CPU, e.g. 200%% for two cores. Default: cores / workers.")
+    r.add_argument("--tasks-max", type=int, default=2048)
+    r.add_argument("--no-limits", action="store_true",
+                   help="run workers unboxed. A runaway one can then take the machine down.")
     r.add_argument("--min-free-gb", type=float, default=10.0,
                    help="stop dispatching below this much free disk. Cgroups cap memory "
                         "and CPU but not capacity, so this is the only guard there is.")

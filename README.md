@@ -64,11 +64,31 @@ worker that believes it merged and did not is the one case where cleanup destroy
 A failure keeps its tree because the transcript says what the worker thought and the tree is
 the only place the state that broke it still exists.
 
+## Every worker runs in a box
+
+Each worker is launched inside a cgroup with hard memory, CPU and process ceilings, sized
+from available RAM divided by worker count. A runaway worker — a test that never terminates,
+a build that allocates without bound — is then killed by the kernel alone, instead of
+competing with the whole machine while nobody is watching. It exits non-zero, which the swarm
+already handles: the issue is labelled `blocked` and its worktree is kept.
+
+Swap is disabled inside the box on purpose. A worker that swaps instead of dying is how a
+machine ends up locked but not crashed, which is worse — nothing fails, so nothing recovers.
+
+`--memory-max` and `--cpu-quota` override the defaults; `--no-limits` turns the box off and
+says so loudly. If cgroups are unavailable the swarm still runs, but warns rather than
+pretending it is protected.
+
 ## Concurrency is a spend dial
 
 `--workers` is a cost decision, not a throughput one. The Bun rewrite ran 64 agents at once
 and spent roughly $165,000 over eleven days. Start at 2 or 3, watch a night of it, then turn
 it up.
+
+Disk stopped being the binding constraint once merged worktrees are removed; RAM during
+builds is what actually limits you. A headless agent is a few hundred megabytes, but the
+build and test runner it spawns can spike to several gigabytes, and the box covers the whole
+process tree — which is the point.
 
 ## Layout
 
