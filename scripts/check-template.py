@@ -8,12 +8,15 @@ machinery because a human notices within seconds. A pipeline designed to run for
 without anyone looking cannot.
 
 Checks:
-  1. Every agent the frontier can dispatch actually exists.
+  1. Every agent a worker is told to dispatch actually exists.
   2. Every agent file's `name:` matches its filename, and every skill's matches its directory.
   3. Every skill an agent is told to load exists.
-  4. Every stage in the lifecycle table has an owner that exists.
-  5. Restricted roles still have their restrictions (the blindness that is enforced by
-     allowlist rather than by instruction).
+  4. Restricted roles still have their restrictions (enforced by allowlist, not instruction).
+  5. Load-bearing sentences are still where the rules say they are.
+
+A check that inspects nothing must not report clean: every rule below asserts it had a
+non-empty input set, because a vacuous pass is indistinguishable from a real one to whoever
+reads the exit code.
 
 Usage: check-template.py [template_root]     Exit 0 clean, 1 on any failure.
 """
@@ -25,16 +28,14 @@ from pathlib import Path
 FRONTMATTER = re.compile(r"^---\s*\n(.*?)\n---", re.S)
 NAME_FIELD = re.compile(r"^name:\s*(\S+)", re.M)
 TOOLS_FIELD = re.compile(r"^tools:\s*(.+)$", re.M)
-STAGE_OWNER = re.compile(r'\(\s*\d+,\s*"[A-Z_]+",\s*"[^"]+",\s*"([a-z-]+)"\s*\)')
+# Agents a worker is instructed to dispatch, named in backticks in the worker playbook.
+DISPATCHED = re.compile(r"`([a-z][a-z-]+)`\s+agent")
 SKILL_LOAD = re.compile(r"`([a-z][a-z-]{2,})`\s*—\s*your playbook", re.I)
 
 # Roles whose restriction is the point of the role. If one of these silently gains a tool,
 # the property it exists to guarantee is gone and nothing else would notice.
 FORBIDDEN_TOOLS = {
     "blind-tester": ["Read", "Grep", "Glob", "Bash", "Write", "Edit"],
-    "researcher": ["Bash", "Write", "Edit", "Read"],
-    "critic": ["Write", "Edit"],
-    "judge": ["Write", "Edit"],
     "reviewer": ["Write", "Edit"],
     "hacker": ["Write", "Edit"],
 }
@@ -49,6 +50,16 @@ FORBIDDEN_TOOLS = {
 # act with a second edit attached. Rule 21 has been revised three times in a single session;
 # each revision should have been a decision, not a diff nobody noticed.
 PROSE_INVARIANTS = [
+    (".claude/skills/work-issue/SKILL.md", "must contain $SWARM_REPO",
+     "a run is bound to one repository; wandering is the failure with no undo"),
+    (".claude/skills/work-issue/SKILL.md", "Give them nothing else",
+     "reviewers are starved of context on purpose — the author's reasoning carries the author's blind spots"),
+    (".claude/skills/work-issue/SKILL.md", "You do not fix your own review findings",
+     "the builder defends its work; the fixer has no stake in it"),
+    (".claude/skills/work-issue/SKILL.md", "the code is wrong — fix the code",
+     "the stub-out anti-pattern, learned the hard way on the Bun rewrite"),
+    (".claude/skills/work-issue/SKILL.md", "An empty result is not a pass",
+     "a gate satisfied by the absence of work is the easiest one to pass by accident"),
     ("docs/constitution.md", "with no defensible default",
      "rule 21 — blocking needs BOTH halves, not owner-held information alone"),
     ("docs/constitution.md", "Classify per question, never in bulk",
@@ -59,14 +70,6 @@ PROSE_INVARIANTS = [
      "rule 23 — blindness is a property of the system, not an instruction"),
     ("docs/constitution.md", "may not be whoever fixes it",
      "rule 24 — red team proves it, blue team closes it, red team re-attacks"),
-    (".claude/skills/critic/SKILL.md", "never become your checklist",
-     "a critic scoped to last round's findings cannot catch a defect created by the remedy"),
-    (".claude/skills/judge/SKILL.md", "never authored the artifact",
-     "the author of important work cannot be its sole judge"),
-    (".claude/skills/advance/SKILL.md", "one step",
-     "a driver that loops is a session someone has to babysit"),
-    (".claude/agents/researcher.md", "must not be an agent that can act",
-     "the containment that lets a research role read the open web"),
 ]
 
 
@@ -89,19 +92,23 @@ def main(argv):
     skills = {p.name: p / "SKILL.md" for p in skills_dir.iterdir()
               if p.is_dir() and (p / "SKILL.md").is_file()}
 
-    # 1 + 4. Stage owners the frontier can dispatch must exist.
-    frontier = root / "scripts" / "frontier.py"
-    if frontier.is_file():
-        owners = set(STAGE_OWNER.findall(frontier.read_text()))
-        for owner in sorted(owners):
-            if owner not in agents:
+    # 1. Agents a worker is told to dispatch must exist.
+    worker = skills.get("work-issue")
+    if worker and worker.is_file():
+        dispatched = set(DISPATCHED.findall(worker.read_text(errors="replace")))
+        if not dispatched:
+            fails.append(
+                "work-issue names no agent to dispatch — either the playbook lost its "
+                "review step, or this check stopped matching it and is now passing vacuously"
+            )
+        for name in sorted(dispatched):
+            if name not in agents:
                 fails.append(
-                    f"frontier.py dispatches `{owner}` for a pipeline stage, but "
-                    f".claude/agents/{owner}.md does not exist — /advance will fail when it "
-                    f"reaches that stage"
+                    f"work-issue dispatches the `{name}` agent, but "
+                    f".claude/agents/{name}.md does not exist — the worker will fail mid-issue"
                 )
     else:
-        notes.append("scripts/frontier.py not found — skipped the stage-owner check")
+        fails.append("skills/work-issue/SKILL.md is missing — the swarm has no worker playbook")
 
     # 2. Declared names must match locations.
     for stem, path in sorted(agents.items()):
@@ -132,6 +139,10 @@ def main(argv):
     # 5. Restricted roles are still restricted.
     for stem, forbidden in FORBIDDEN_TOOLS.items():
         if stem not in agents:
+            fails.append(
+                f"agents/{stem}.md is missing, but this check still expects to constrain it — "
+                f"either restore the role or drop it from FORBIDDEN_TOOLS deliberately"
+            )
             continue
         m = TOOLS_FIELD.search(frontmatter(agents[stem]))
         if not m:

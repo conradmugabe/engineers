@@ -1,97 +1,76 @@
-# Engineers
+# Swarm — autonomous issue builders
 
-A portable AI engineering team for Claude Code. Drop the `.claude/` directory into any
-project and you get a full team: a principal engineer to plan with, an orchestrator to
-run the work, and specialist engineers that implement, review, and test — coordinated
-through GitHub Issues, non-blocking, verified at every gate.
-
-## The team
-
-| Role | Runs as | Model | Access |
-|---|---|---|---|
-| Principal engineer | Interactive session + `/plan-feature` | Fable | Full |
-| Orchestrator | Interactive session + `/orchestrate` | Fable/Opus | Full |
-| Product analyst | Subagent | Opus | Full tools — owns intake and requirements |
-| Researcher | Subagent | Opus | **Web only** — no shell, no files; reads untrusted text so it cannot act |
-| Critic | Subagent | Opus | Read only — attacks stage artifacts, never decides |
-| Judge | Subagent | Opus | Read + execute — decides PASS/REVISE/HUMAN_REQUIRED, never authors |
-| Backend engineer | Subagent | Opus | Full tools |
-| Frontend engineer | Subagent | Opus | Full tools |
-| QA engineer | Subagent | Opus | Full tools |
-| Reviewer | Subagent | Opus | Read + execute only — cannot edit files |
-| Hacker | Subagent | Opus | Read + execute + offensive browser tools — cannot edit files |
-| Security engineer | Subagent | Opus | Full tools — audits and hardens |
-| Blind tester | Subagent | Opus | Browser only — **cannot open a single source file** |
-
-Each subagent is a thin stub in `.claude/agents/*.md` (the harness needs a flat file to
-register it). The real definition — playbook, templates, standards — lives in a matching
-directory under `.claude/skills/<role>/`, which the agent loads as its first action.
-
-## The flow
-
-```
-1. PLAN      You + /plan-feature (Fable): talk through the product, produce a spec,
-             file self-contained GitHub issues labeled `ready`, dependencies marked.
-
-2. WORK      A second session runs /orchestrate. Per issue, it:
-             dispatch engineer (background, isolated worktree)
-               → engineer reports done
-               → orchestrator runs the tests ITSELF (never trusts the report)
-               → reviewer attacks the diff (adversarial, read-only)
-               → QA engineer attacks the behavior (writes/extends automated tests)
-               → merge to the feature branch
-             Issues run in parallel when independent. The orchestrator is idle
-             between events, not blocked.
-
-3. FEEL      Once a feature's issues are merged: orchestrator starts the app and
-             dispatches the blind tester — a non-technical user persona with browser
-             tools only. It gets a URL and the product story, never the code. Its
-             confusion is data. Findings come back as new GitHub issues.
-
-4. BREAK     Before the feature can reach `main`, it gets attacked: the hacker (red
-             team) breaks in with full code + the running app, the security engineer
-             (blue team) audits, hardens, and owns the verdict. Fixes carry regression
-             tests; the hacker re-attacks until nothing lands. No open critical or high
-             finding may reach `main`.
-
-5. LOOP      Until the `ready` queue is dry. State lives in issue labels
-             (`ready → in-progress → in-review → blocked/done`), so any new
-             orchestrator session recovers the full picture from `gh`.
-```
-
-## Two-layer skills
-
-**Core layer** (portable, improves over time, travels to every project):
-
-- `plan-feature`, `orchestrate` — the two workflow playbooks
-- `backend-engineer`, `frontend-engineer`, `qa-engineer`, `reviewer`, `hacker`,
-  `security-engineer`, `blind-tester` — role playbooks
-- Topical craft skills, named for what they are — `react`, `api-calls`, and whatever
-  comes next. They grow through real project work: the owner reviews what agents do
-  and tells the principal engineer what to add or remove.
-
-**Project layer** (created per project, never copied back):
-
-- `project-context` — stack, architecture, domain glossary, how to run the app.
-  Ships as a template; `/plan-feature` fills it in during project setup.
-- Any project-specific skills the project needs (e.g. `design-system` for its visual
-  language). Role playbooks check for these and load them when present.
-
-On conflict, the project layer wins — core skills say how this team builds software
-anywhere; `project-context` says what is true here.
-
-## Installing into a project
+Point it at one GitHub repository. It reads the open issues, claims them, builds them, tears
+them apart in adversarial review, fixes what that finds, gates them, and merges. You start it
+and walk away.
 
 ```bash
-cp -r .claude/ /path/to/project/.claude/
-cd /path/to/project
-gh label create ready && gh label create in-progress && gh label create in-review && gh label create blocked
-claude   # then: /plan-feature — first run fills in project-context
+scripts/swarm.py run --repo owner/name --workers 3
+scripts/swarm.py status --repo owner/name
 ```
 
-## Ground rules
+There is no planning here. No ideation, no interview, no brief. Issues arrive already written;
+this builds them.
 
-- The orchestrator **verifies, never trusts**. Reports are claims; tests and reviews are facts.
-- Nothing auto-merges to `main`. Feature branches yes; `main` is the owner's call.
-- Max 3 engineers in flight — merge coordination cost beats throughput beyond that, early on.
-- All coordination state lives in GitHub Issues, never in a conversation's memory.
+## How a worker spends an issue
+
+```
+claim (atomic, on disk)
+  → lead plans it            concrete steps, each ending in something observable
+  → builder implements       one step, one commit, named paths only
+  → 2× adversarial review    given the diff and nothing else: "assume it is wrong"
+  → fixer applies findings   never the builder — it wants its own code accepted
+  → gates                    types, lint, tests scoped to what changed
+  → merge, push, release
+```
+
+## The rules that make it survivable
+
+**One repository per run.** Bound in `.swarm/config.json` and re-checked by every worker
+before it touches anything. An agent with a shell and a token that wanders into the wrong
+repository is the failure with no undo.
+
+**Claims are a local file lock.** `O_CREAT|O_EXCL` is atomic; GitHub has no compare-and-swap,
+so the read-then-label pattern races and two workers build the same issue. The lock is
+authoritative, the label is a mirror. Locks heartbeat, so a dead worker releases its issue
+instead of parking it forever.
+
+**One worktree per worker.** Not a convention — a structural impossibility of the failure
+where agents run `git stash` and `git reset --hard` on each other.
+
+**Git commands are allowlisted.** No `stash`, no `reset`, no `checkout .`, no `clean`, no
+command touching files the worker did not name. Commit named paths immediately, never batch.
+
+**Reviewers are starved of context deliberately.** They get the diff and the acceptance
+criteria. Not the plan, not the reasoning, not what the builder found hard. The agent that
+wrote the code wants it accepted; an agent handed the author's reasoning inherits the author's
+blind spots.
+
+**No stubbing to reach green.** If it takes a paragraph-long comment to justify why the
+workaround is fine, the code is wrong — fix the code.
+
+**An empty result is not a pass.** A test command reporting that nothing ran is a failure.
+
+**A failed issue is labelled `blocked`, not returned to the queue.** An issue that retries
+forever burns tokens forever.
+
+## Concurrency is a spend dial
+
+`--workers` is a cost decision, not a throughput one. The Bun rewrite ran 64 agents at once
+and spent roughly $165,000 over eleven days. Start at 2 or 3, watch a night of it, then turn
+it up.
+
+## Layout
+
+```
+scripts/swarm.py            supervisor: polls, spawns, reaps, restarts
+scripts/claim.py            atomic claiming, heartbeats, stale reclaim
+scripts/check-template.py   integrity checks on this template itself
+.claude/skills/work-issue/  what one worker does, start to finish
+.claude/agents/             backend, frontend, qa, reviewer, hacker, security, blind-tester
+docs/swarm-architecture.md  why it is shaped this way
+docs/constitution.md        the rules that hold regardless of task
+```
+
+Prior art: [Rewriting Bun in Rust using AI agents](https://bun.com/blog/bun-in-rust) — the
+role split, the git discipline, and the resource limits here are lifted from that run.
