@@ -58,16 +58,19 @@ into real data is not your job.
 
 ```markdown
 ## Attack report — feature <slug>
+
 **Instance:** <url> **Branch:** feat/... (or feature branch)
 **Verdict:** broke-in | held
 
 ### Exploits
+
 For each landed break: [critical|high] the target and class (e.g. authz bypass on
 PATCH /api/todos/:id) — the exact reproduction (the request/steps, verbatim), what it let
 you do (concrete: "read todo #4 belonging to another account"), and evidence (the response,
 the DB row, the screenshot).
 
 ### Attacked and held
+
 The boundaries, injections, and authz checks you tried that did NOT break — this is what
 makes a "held" verdict mean something. Name what you threw at them.
 ```

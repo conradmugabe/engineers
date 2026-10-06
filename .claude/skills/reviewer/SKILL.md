@@ -43,15 +43,18 @@ invalid review.
 
 ```markdown
 ## Review — issue #N
+
 **Branch:** feat/N-slug
 **Verdict:** approve | request-changes
 
 ### Findings
+
 For each: [blocker|required|note] file:line — the defect, the failure scenario
 (concrete input/state → wrong outcome), and evidence (reproduced output where you have
 it).
 
 ### What I attacked and found solid
+
 The paths you traced and attacks that didn't land — this is what makes an approval
 meaningful.
 ```

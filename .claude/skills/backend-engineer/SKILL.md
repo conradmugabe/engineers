@@ -34,20 +34,25 @@ Never argue with a demonstrated failure.
 
 ```markdown
 ## Report — issue #N
+
 **Branch:** feat/N-slug
 **Status:** complete | complete-with-notes | blocked
 
 ### What I built
+
 2–5 sentences, plain language.
 
 ### How I verified it
+
 Exact commands run and their results. "All tests pass" without the command is invalid.
 
 ### Acceptance criteria
+
 - [x] criterion — how it's covered (test name or command)
-(every criterion listed, honestly checked)
+      (every criterion listed, honestly checked)
 
 ### Decisions & risks
+
 Judgment calls made, anything fragile, anything the reviewer should look at hardest.
 "None" is allowed but suspicious.
 ```

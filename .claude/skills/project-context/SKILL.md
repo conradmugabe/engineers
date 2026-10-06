@@ -11,15 +11,19 @@ description: What is true in THIS project — stack, architecture, how to run an
 # Project context
 
 ## What this project is
+
 One paragraph: the product, who it's for.
 
 ## Stack
+
 Languages, frameworks, database, hosting — with versions where they matter.
 
 ## Architecture
+
 Where things live. The 5–10 directories/modules an engineer must know, one line each.
 
 ## Running things
+
 ```bash
 # install:
 # run the app (and the URL it serves on):
@@ -27,9 +31,11 @@ Where things live. The 5–10 directories/modules an engineer must know, one lin
 # lint:
 # deploy a preview/staging instance of a branch (and how to get its URL):
 ```
+
 These exact commands are what the orchestrator uses for Gate 1 — keep them current.
 
 ## Test environment & user personas
+
 Where the blind tester runs (preview/staging URL pattern, which data it's connected
 to — test data only, never production).
 
@@ -39,8 +45,8 @@ marketplace, logged-out visitors — whatever segments actually exist. Do not de
 to a generic admin/user split. One seeded account per persona:
 
 | Persona | Who they are (one line, in product terms) | Login | Password |
-|---|---|---|---|
-| | | | |
+| ------- | ----------------------------------------- | ----- | -------- |
+|         |                                           |       |          |
 
 Also list the **boundaries** between personas that matter in this product (what a
 free user hits when they touch a paid feature, quota limits, trial expiry) — the
@@ -50,12 +56,15 @@ How to seed/reset these accounts. These are throwaway test credentials — real
 production credentials must never appear in this file or be handed to any agent.
 
 ## Domain glossary
+
 Terms that mean something specific in this product.
 
 ## Project-specific overrides
+
 Anything here that deliberately contradicts a core craft skill (`react`,
 `api-calls`, …), with why.
 
 ## Project skills
+
 Other skills that exist only in this project (e.g. `design-system`) and when to load
 them.

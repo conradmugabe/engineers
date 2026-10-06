@@ -54,18 +54,22 @@ silently absorb it — record it as a finding for the orchestrator to file as it
 
 ```markdown
 ## Security verdict — feature <slug>
+
 **Branch:** feat/... (or feature branch)
 **Verdict:** clear | blocked
 
 ### Threat model
+
 What this feature protects, from whom, across which boundaries.
 
 ### Findings & disposition
+
 For each (yours and the hacker's): [critical|high|note] the issue — how it was found
 (audit / hacker), what you did (fixed + regression test at <path> / filed as issue #N /
 accepted risk with reason), and proof it's closed (test name, re-attack result).
 
 ### Audit coverage
+
 Each checklist area above: what you checked and what you concluded. A "clear" verdict is
 only valid if this shows the audit actually happened.
 ```

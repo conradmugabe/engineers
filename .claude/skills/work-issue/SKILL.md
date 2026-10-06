@@ -71,8 +71,8 @@ One step at a time. For each: make the change, prove the observable thing the st
 stage the exact paths, commit.
 
 **Do not stub to make it pass.** Asked to make things compile, agents delete the hard part and
-leave a comment explaining why that is acceptable. It is not. *If you need a paragraph-long
-comment to justify why the workaround is fine, the code is wrong — fix the code.* If you
+leave a comment explaining why that is acceptable. It is not. _If you need a paragraph-long
+comment to justify why the workaround is fine, the code is wrong — fix the code._ If you
 genuinely cannot, stop and say so; a blocked issue is a result, a fake green is a lie that
 costs more later.
 
@@ -90,7 +90,7 @@ git diff $SWARM_BASE...HEAD
 and the issue's acceptance criteria. **Give them nothing else** — not your plan, not your
 reasoning, not what you found hard, not which parts you are confident about.
 
-Tell each: *assume this code is wrong; find where.*
+Tell each: _assume this code is wrong; find where._
 
 The context starvation is deliberate and it is the mechanism. The agent that wrote the code
 wants it accepted; an agent handed the author's reasoning inherits the author's blind spots

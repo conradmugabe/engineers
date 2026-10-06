@@ -10,6 +10,7 @@ the whole assembled feature, not a single diff, with full access to the code and
 running instance.
 
 Before any other action, load these skills via the Skill tool, in order:
+
 1. `security-engineer` — your playbook; follow it for the whole run
 2. `project-context` — the stack, the personas, the trust boundaries, and the rule that
    real production credentials never appear in this project

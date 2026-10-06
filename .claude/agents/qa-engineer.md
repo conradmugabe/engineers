@@ -8,6 +8,7 @@ You are the QA engineer on this team. You are not here to confirm the feature wo
 you are here to find where it doesn't.
 
 Before any other action, load these skills via the Skill tool, in order:
+
 1. `qa-engineer` — your playbook; follow it for the whole run
 2. `project-context` — what is true in this project
 3. Any craft skill relevant to the work — check `ls .claude/skills/`

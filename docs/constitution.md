@@ -74,30 +74,30 @@ solves.
     ("none of these is irreversible") hides the one row that is, and a set of questions
     grouped for convenience is not a set that shares a classification. Each question carries
     its own.
-    *Why: a pipeline that merely interrupts rarely still needs its owner; one that defaults
+    _Why: a pipeline that merely interrupts rarely still needs its owner; one that defaults
     and records does not. But a pipeline that defaults on questions nobody ever saw is not
     autonomous, it is unaccountable, and from the outside the two look identical. The fix is
     to surface everything and block on almost nothing — conflating the two in either
-    direction is how this rule fails.*
+    direction is how this rule fails._
 
 22. **A correction is not finished until it exists as a check.** When the owner rejects
     something, the fix is incomplete until the lint rule, test, or checklist item that
     prevents its recurrence exists too. Prose guidance in a skill is advisory context; a
     failing check is a hard stop.
-    *Why: taste delivered by eyeballing is a human dependency by definition. Encoded taste
-    compounds; spoken taste evaporates.*
+    _Why: taste delivered by eyeballing is a human dependency by definition. Encoded taste
+    compounds; spoken taste evaporates._
 
 23. **Someone on the team must be structurally unable to read the code.** The blind tester
     holds no source access, no shell, and no logs — enforced by tool allowlist, not by
     instruction. Confusion, unclear copy, and dead ends are invisible to any agent that
     knows what the button was supposed to do.
-    *Why: every other reviewer shares the implementer's knowledge, and therefore its blind
-    spots.*
+    _Why: every other reviewer shares the implementer's knowledge, and therefore its blind
+    spots._
 
 24. **Whoever attacks the system may not be whoever fixes it.** Red team proves the hole is
     real; blue team proves it is closed; red team re-attacks. This is rule 7 applied to
     security, where the temptation to grade one's own patch is strongest.
-    *Why: a fix nobody failed to break is an unverified fix.*
+    _Why: a fix nobody failed to break is an unverified fix._
 
 ## Enforcement
 

@@ -51,22 +51,27 @@ any of this works, and that's your superpower.
 ## What I tried and what happened
 
 ### Things I could do
+
 Each thing from the description you accomplished, and how easy it felt (easy /
 took me a while / almost gave up).
 
 ### Things I couldn't do or that confused me
+
 For each: what you were trying to do, what you expected, what actually happened,
 where you were on the screen (screenshot). Say how it made you feel — annoyed,
 lost, unsure whether it worked.
 
 ### Things that felt off
+
 Not broken, but weird: labels you didn't understand, steps that felt pointless,
 places you hesitated.
 
 ### Differences between my two browsers
+
 Anything that looked or behaved differently on Chrome vs Firefox, with a screenshot
 from each — or "everything worked the same on both."
 
 ### Would I use this?
+
 One honest paragraph, as this person.
 ```

@@ -38,7 +38,7 @@ over a queue that exactly one thread reads, so no worker ever needs to ask wheth
 is taken — it is told which issue is its own before it starts.
 
 Dispatch is one pass, single-threaded: select the free issues, record them in the ledger,
-label them on GitHub, then spawn. Because the label is written *before* a worker exists, what
+label them on GitHub, then spawn. Because the label is written _before_ a worker exists, what
 you see on GitHub is true from the moment it is true, rather than a mirror written afterwards
 by whoever won a race. If the label call fails, the issue is not built and its ledger entry is
 rolled back — an issue we cannot mark as taken is one a second run would pick up again.
@@ -70,8 +70,8 @@ whose absence broke their first run.
 
 **4. Reviewers are starved of context on purpose.** The reviewer gets the diff and the
 acceptance criteria — never the builder's reasoning, never its plan. Sumner's framing is
-exactly right: *the Claude that wrote the code wants it accepted; the Claude that reviews
-wants to find issues.* Two reviewers per build, independent, both told to assume the code is
+exactly right: _the Claude that wrote the code wants it accepted; the Claude that reviews
+wants to find issues._ Two reviewers per build, independent, both told to assume the code is
 wrong.
 
 **5. A fixer applies findings, not the builder.** The builder defends its work; the fixer has
@@ -82,8 +82,8 @@ no stake in it.
 - **No slow commands inside the loop.** A full build or full test suite per worker × 10
   workers will thrash the machine. Scope every command to what the issue touched.
 - **No stubbing to make it pass.** Asked to make things compile, agents stub the failing
-  function out. The rule that fixed it: *if you need a paragraph-long comment to justify why
-  the workaround is fine, the code is wrong — fix the code.*
+  function out. The rule that fixed it: _if you need a paragraph-long comment to justify why
+  the workaround is fine, the code is wrong — fix the code._
 - **Resource limits are not optional, and they are two problems, not one.** Their machine ran
   out of disk and crashed repeatedly at high concurrency, and separately their debug-build
   tests blew past time limits.
@@ -108,6 +108,7 @@ no stake in it.
   the only place the state that broke it still exists. And "merged" is verified against the
   remote rather than taken from the worker's report — a worker that believes it merged and did
   not is the one case where cleaning up destroys real work.
+
 - **Cost is real.** Their 11-day rewrite cost roughly $165,000 at API pricing. Concurrency is
   a spend dial, which is why it is a flag rather than a constant.
 

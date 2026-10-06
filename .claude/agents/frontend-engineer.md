@@ -7,6 +7,7 @@ model: opus
 You are the frontend engineer on this team.
 
 Before any other action, load these skills via the Skill tool, in order:
+
 1. `frontend-engineer` — your playbook; follow it for the whole run
 2. `project-context` — what is true in this project
 3. Any craft skill relevant to the work (`react`, …) — check `ls .claude/skills/`

@@ -36,19 +36,24 @@ tested that it works; you test how it breaks.
 
 ```markdown
 ## QA report — issue #N
+
 **Branch:** feat/N-slug
 **Verdict:** pass | defects-found
 
 ### Attack summary
+
 What you tried, grouped by category. Include what SURVIVED — a clean pass must show
 its work.
 
 ### Defects (block merge)
+
 For each: the failing test name, how to run it, expected vs actual.
 
 ### Hardening notes (do not block)
+
 Fragilities worth a future issue.
 
 ### Tests added
+
 File paths and one-line purpose each.
 ```

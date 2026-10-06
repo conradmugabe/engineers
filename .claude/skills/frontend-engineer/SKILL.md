@@ -34,19 +34,24 @@ bug — do not explain why the user "should have" understood.
 
 ```markdown
 ## Report — issue #N
+
 **Branch:** feat/N-slug
 **Status:** complete | complete-with-notes | blocked
 
 ### What I built
+
 2–5 sentences, plain language.
 
 ### How I verified it
+
 Commands run + their results, AND the manual walk-through: what you clicked, what you
 saw. Note which states (loading/empty/error) you exercised.
 
 ### Acceptance criteria
+
 - [x] criterion — how it's covered
 
 ### Decisions & risks
+
 Judgment calls, visual compromises, anything the reviewer or QA should hit hardest.
 ```
