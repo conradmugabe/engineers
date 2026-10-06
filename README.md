@@ -5,9 +5,14 @@ them apart in adversarial review, fixes what that finds, gates them, and merges.
 and walk away.
 
 ```bash
-scripts/swarm.py run --repo owner/name --workers 3
-scripts/swarm.py status --repo owner/name
+bun install                                       # once
+bun scripts/swarm.ts run --repo owner/name --workers 3
+bun scripts/swarm.ts status
+bun scripts/swarm.ts stop                         # in-flight workers finish first
 ```
+
+Written in TypeScript on [Bun](https://bun.sh). `bun test` runs the suite, `bun run typecheck`
+the strict type check, `bun run check` the template's integrity check.
 
 There is no planning here. No ideation, no interview, no brief. Issues arrive already written;
 this builds them.
@@ -93,9 +98,10 @@ process tree — which is the point.
 ## Layout
 
 ```
-scripts/swarm.py            supervisor: polls, spawns, reaps, restarts
-scripts/claim.py            atomic claiming, heartbeats, stale reclaim
-scripts/check-template.py   integrity checks on this template itself
+scripts/swarm.ts            supervisor: polls, dispatches, spawns, reaps
+scripts/claim.ts            in-flight ledger: atomic entries, heartbeats, stale reclaim
+scripts/check-template.ts   integrity checks on this template itself
+scripts/*.test.ts           bun test suites for the above
 .claude/skills/work-issue/  what one worker does, start to finish
 .claude/agents/             backend, frontend, qa, reviewer, hacker, security, blind-tester
 docs/swarm-architecture.md  why it is shaped this way

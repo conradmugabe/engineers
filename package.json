@@ -1,0 +1,15 @@
+{
+  "name": "engineers",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "swarm": "bun scripts/swarm.ts",
+    "check": "bun scripts/check-template.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.8.0"
+  }
+}
