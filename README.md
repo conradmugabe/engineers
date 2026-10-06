@@ -106,6 +106,7 @@ scripts/*.test.ts           bun test suites for the above
 .claude/agents/             backend, frontend, qa, reviewer, hacker, security, blind-tester
 docs/swarm-architecture.md  why it is shaped this way
 docs/constitution.md        the rules that hold regardless of task
+docs/decisions/             decision records — what was decided, and why
 ```
 
 Prior art: [Rewriting Bun in Rust using AI agents](https://bun.com/blog/bun-in-rust) — the
