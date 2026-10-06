@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Integrity checks for the template itself.
+ * Integrity checks for the plugin itself.
  *
  * Every issue the swarm builds is adversarially reviewed. The machinery doing the reviewing was,
  * until this script, reviewed by nobody — which is constitution rule 7 violated one level up.
@@ -28,8 +28,8 @@ const FRONTMATTER = /^---\s*\n([\s\S]*?)\n---/;
 const NAME_FIELD = /^name:\s*(\S+)/m;
 const TOOLS_FIELD = /^tools:\s*(.+)$/m;
 // Agents a worker is instructed to dispatch, named in backticks in the worker playbook.
-const DISPATCHED = /`([a-z][a-z-]+)`\s+agent/g;
-const SKILL_LOAD = /`([a-z][a-z-]{2,})`\s*—\s*your playbook/gi;
+const DISPATCHED = /`((?:[a-z-]+:)?[a-z][a-z-]+)`\s+agent/g;
+const SKILL_LOAD = /`((?:[a-z-]+:)?[a-z][a-z-]{2,})`\s*—\s*your playbook/gi;
 
 // Roles whose restriction is the point of the role. If one of these silently gains a tool,
 // the property it exists to guarantee is gone and nothing else would notice.
@@ -49,27 +49,27 @@ const FORBIDDEN_TOOLS: Record<string, readonly string[]> = {
 // each revision should have been a decision, not a diff nobody noticed.
 const PROSE_INVARIANTS: readonly (readonly [file: string, sentence: string, why: string])[] = [
   [
-    ".claude/skills/work-issue/SKILL.md",
+    "skills/work-issue/SKILL.md",
     "must contain $SWARM_REPO",
     "a run is bound to one repository; wandering is the failure with no undo",
   ],
   [
-    ".claude/skills/work-issue/SKILL.md",
+    "skills/work-issue/SKILL.md",
     "Give them nothing else",
     "reviewers are starved of context on purpose — the author's reasoning carries the author's blind spots",
   ],
   [
-    ".claude/skills/work-issue/SKILL.md",
+    "skills/work-issue/SKILL.md",
     "You do not fix your own review findings",
     "the builder defends its work; the fixer has no stake in it",
   ],
   [
-    ".claude/skills/work-issue/SKILL.md",
+    "skills/work-issue/SKILL.md",
     "the code is wrong — fix the code",
     "the stub-out anti-pattern, learned the hard way on the Bun rewrite",
   ],
   [
-    ".claude/skills/work-issue/SKILL.md",
+    "skills/work-issue/SKILL.md",
     "An empty result is not a pass",
     "a gate satisfied by the absence of work is the easiest one to pass by accident",
   ],
@@ -105,11 +105,20 @@ const frontmatter = (p: string) => FRONTMATTER.exec(read(p))?.[1] ?? "";
 
 /** Run every check against a template root. Returns the failures; empty means clean. */
 export function checkTemplate(root: string): { agents: number; skills: number; fails: string[] } {
-  const agentsDir = join(root, ".claude", "agents");
-  const skillsDir = join(root, ".claude", "skills");
-  if (!existsSync(agentsDir) || !existsSync(skillsDir)) {
-    throw new Error(`${root} does not look like a template root`);
+  const agentsDir = join(root, "agents");
+  const skillsDir = join(root, "skills");
+  const manifest = join(root, ".claude-plugin", "plugin.json");
+  if (!existsSync(agentsDir) || !existsSync(skillsDir) || !existsSync(manifest)) {
+    throw new Error(`${root} does not look like a plugin root`);
   }
+  const plugin = (JSON.parse(read(manifest)) as { name: string }).name;
+
+  /** Inside a plugin, its agents and skills are only reachable as `plugin:name`. A bare name
+   * reads fine in prose and resolves to nothing at runtime. */
+  const unprefixed = (ref: string): string | null => {
+    const colon = ref.indexOf(":");
+    return colon > 0 && ref.slice(0, colon) === plugin ? ref.slice(colon + 1) : null;
+  };
 
   const agents = new Map(
     readdirSync(agentsDir)
@@ -133,10 +142,16 @@ export function checkTemplate(root: string): { agents: number; skills: number; f
           "or this check stopped matching it and is now passing vacuously",
       );
     }
-    for (const name of [...dispatched].sort()) {
-      if (!agents.has(name)) {
+    for (const ref of [...dispatched].sort()) {
+      const name = unprefixed(ref);
+      if (name === null) {
         fails.push(
-          `work-issue dispatches the \`${name}\` agent, but .claude/agents/${name}.md does not exist ` +
+          `work-issue dispatches \`${ref}\` — inside the plugin it must be \`${plugin}:<agent>\`, ` +
+            "or the worker will fail mid-issue",
+        );
+      } else if (!agents.has(name)) {
+        fails.push(
+          `work-issue dispatches the \`${ref}\` agent, but agents/${name}.md does not exist ` +
             "— the worker will fail mid-issue",
         );
       }
@@ -161,10 +176,15 @@ export function checkTemplate(root: string): { agents: number; skills: number; f
 
   // 3. A playbook an agent is told to load first must exist.
   for (const [stem, path] of [...agents].sort()) {
-    for (const skill of new Set([...read(path).matchAll(SKILL_LOAD)].flatMap((m) => m[1] ?? []))) {
-      if (!skills.has(skill)) {
+    for (const ref of new Set([...read(path).matchAll(SKILL_LOAD)].flatMap((m) => m[1] ?? []))) {
+      const skill = unprefixed(ref);
+      if (skill === null) {
         fails.push(
-          `agents/${stem}.md loads \`${skill}\` as its playbook, but skills/${skill}/SKILL.md does not exist`,
+          `agents/${stem}.md loads \`${ref}\` as its playbook — inside the plugin it must be \`${plugin}:<skill>\``,
+        );
+      } else if (!skills.has(skill)) {
+        fails.push(
+          `agents/${stem}.md loads \`${ref}\` as its playbook, but skills/${skill}/SKILL.md does not exist`,
         );
       }
     }

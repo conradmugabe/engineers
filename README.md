@@ -1,4 +1,18 @@
-# Swarm — autonomous issue builders
+# mors — an autonomous software team
+
+A Claude Code plugin. Install it once and it works in every project:
+
+```bash
+claude plugin marketplace add conradmugabe/engineers
+claude plugin install mors@mors
+
+# later, to pick up workflow changes
+claude plugin marketplace update mors && claude plugin update mors
+```
+
+Its agents and skills are namespaced: `/mors:work-issue`, the `mors:reviewer` agent, and so on.
+
+## The swarm
 
 Point it at one GitHub repository. It reads the open issues, claims them, builds them, tears
 them apart in adversarial review, fixes what that finds, gates them, and merges. You start it
@@ -12,7 +26,13 @@ bun scripts/swarm.ts stop                         # in-flight workers finish fir
 ```
 
 Written in TypeScript on [Bun](https://bun.sh). `bun test` runs the suite, `bun run typecheck`
-the strict type check, `bun run check` the template's integrity check.
+the strict type check, `bun run check` the plugin's integrity check.
+
+Each worker is a headless `claude -p "/mors:work-issue N"` started inside the target repository
+with `--plugin-dir` pointing here, so the plugin loads without being installed there. Its git and
+`gh` commands are allowlisted and the destructive ones (`stash`, `reset`, `clean`, `rebase`,
+force-push) denied; project commands such as the test runner come from the target project's own
+`.claude/settings.json`. Nothing may prompt — anything outside the lists is refused.
 
 There is no planning here. No ideation, no interview, no brief. Issues arrive already written;
 this builds them.
@@ -100,10 +120,12 @@ process tree — which is the point.
 ```
 scripts/swarm.ts            supervisor: polls, dispatches, spawns, reaps
 scripts/claim.ts            in-flight ledger: atomic entries, heartbeats, stale reclaim
-scripts/check-template.ts   integrity checks on this template itself
+scripts/check-template.ts   integrity checks on the plugin itself
 scripts/*.test.ts           bun test suites for the above
-.claude/skills/work-issue/  what one worker does, start to finish
-.claude/agents/             backend, frontend, qa, reviewer, hacker, security, blind-tester
+.claude-plugin/             plugin and marketplace manifests
+skills/work-issue/          what one worker does, start to finish
+agents/                     backend, frontend, qa, reviewer, hacker, security, blind-tester
+templates/project-context/  per-project context, copied into a target's .claude/skills/
 docs/swarm-architecture.md  why it is shaped this way
 docs/constitution.md        the rules that hold regardless of task
 docs/decisions/             decision records — what was decided, and why

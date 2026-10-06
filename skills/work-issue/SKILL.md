@@ -81,7 +81,7 @@ Build only what the issue asks for. No adjacent refactors, no unrequested featur
 
 ## 5. Adversarial review — two of them, starved of context
 
-Dispatch **two independent `reviewer` agents** on the diff. Give each one exactly two things:
+Dispatch **two independent `mors:reviewer` agents** on the diff. Give each one exactly two things:
 
 ```bash
 git diff $SWARM_BASE...HEAD

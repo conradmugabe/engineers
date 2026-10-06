@@ -1,0 +1,14 @@
+{
+  "name": "mors",
+  "description": "Plugins for building software with an autonomous, adversarially-checked agent team.",
+  "owner": {
+    "name": "conrad mugabe"
+  },
+  "plugins": [
+    {
+      "name": "mors",
+      "source": "./",
+      "description": "An autonomous software team."
+    }
+  ]
+}

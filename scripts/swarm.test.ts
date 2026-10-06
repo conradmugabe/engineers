@@ -7,6 +7,8 @@ import {
   dispatch,
   keepWarm,
   mergeLanded,
+  PLUGIN_ROOT,
+  workerCommand,
   type DispatchCtx,
   type Sh,
   type ShResult,
@@ -132,5 +134,33 @@ describe("keepWarm", () => {
     expect(atExit).toBeGreaterThanOrEqual(3);
     await Bun.sleep(50);
     expect(beats).toBe(atExit);
+  });
+});
+
+describe("workerCommand", () => {
+  const cmd = workerCommand(42, "acceptEdits");
+  const after = (flag: string) => cmd[cmd.indexOf(flag) + 1];
+
+  test("invokes the namespaced skill and loads this plugin explicitly", () => {
+    // Without --plugin-dir the worker runs inside the target repo, where /work-issue does not exist.
+    expect(cmd.slice(0, 3)).toEqual(["claude", "-p", "/mors:work-issue 42"]);
+    expect(after("--plugin-dir")).toBe(PLUGIN_ROOT);
+  });
+
+  test("never waits on a prompt nobody will answer", () => {
+    expect(after("--permission-prompts")).toBe("none");
+  });
+
+  test("denies the git commands that destroy other work", () => {
+    const deny = cmd.slice(cmd.indexOf("--disallowedTools") + 1);
+    for (const c of [
+      "git stash",
+      "git reset",
+      "git clean *",
+      "git rebase *",
+      "git push --force*",
+    ]) {
+      expect(deny.some((d) => d.startsWith(`Bash(${c}`))).toBe(true);
+    }
   });
 });

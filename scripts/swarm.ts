@@ -465,6 +465,73 @@ function createWorktree(repoDir: string, wt: string, branch: string, base: strin
 
 // ---------------------------------------------------------------- worker
 
+/** This plugin's root. Every worker loads it explicitly, because a worker runs inside the
+ * target repository, where nothing else would make `/mors:work-issue` resolve. */
+export const PLUGIN_ROOT = resolve(import.meta.dir, "..");
+
+// The git and gh commands work-issue needs. Project-specific commands — the test runner, the
+// linter — come from the target project's own .claude/settings.json, which the worker inherits
+// because it runs inside that repository.
+const WORKER_ALLOW = [
+  "Bash(git status *)",
+  "Bash(git diff *)",
+  "Bash(git log *)",
+  "Bash(git show *)",
+  "Bash(git branch --show-current)",
+  "Bash(git remote get-url *)",
+  "Bash(git add *)",
+  "Bash(git commit *)",
+  "Bash(git fetch *)",
+  "Bash(git merge *)",
+  "Bash(git push *)",
+  "Bash(gh issue view *)",
+  "Bash(gh issue comment *)",
+  "Bash(gh issue edit *)",
+  "Bash(gh pr create *)",
+  "Bash(gh pr merge *)",
+] as const;
+
+// Commands that act on work the worker did not name. On the Bun rewrite, agents sharing a tree
+// ran these on each other within two minutes. Deny wins over allow, so `git push *` above
+// does not let a force-push through.
+const WORKER_DENY = [
+  "Bash(git stash)",
+  "Bash(git stash *)",
+  "Bash(git reset)",
+  "Bash(git reset *)",
+  "Bash(git clean *)",
+  "Bash(git checkout .)",
+  "Bash(git checkout -- *)",
+  "Bash(git restore *)",
+  "Bash(git rebase *)",
+  "Bash(git push --force*)",
+  "Bash(git push * --force*)",
+  "Bash(git push -f *)",
+  "Bash(git push * -f)",
+  "Bash(git push * -f *)",
+] as const;
+
+/** The headless Claude a worker runs. Nothing may prompt: nobody is there to answer, so
+ * anything outside the allowlist is denied rather than left waiting. */
+export function workerCommand(issue: number, permissionMode: string, model?: string): string[] {
+  return [
+    "claude",
+    "-p",
+    `/mors:work-issue ${issue}`,
+    "--plugin-dir",
+    PLUGIN_ROOT,
+    "--permission-mode",
+    permissionMode,
+    "--permission-prompts",
+    "none",
+    "--allowedTools",
+    ...WORKER_ALLOW,
+    "--disallowedTools",
+    ...WORKER_DENY,
+    ...(model ? ["--model", model] : []),
+  ];
+}
+
 export type Outcome = "merged" | "worktree-failed" | "merge-not-found" | `exit-${number}`;
 
 /**
@@ -532,8 +599,7 @@ async function runWorker(ctx: WorkerCtx, slot: string, issue: Issue): Promise<Ou
     }
 
     log(slot, `#${n} ${issue.title.slice(0, 56)}`);
-    let cmd = ["claude", "-p", `/work-issue ${n}`, "--permission-mode", ctx.permissionMode];
-    if (ctx.model) cmd.push("--model", ctx.model);
+    let cmd = workerCommand(n, ctx.permissionMode, ctx.model);
     if (ctx.limits) cmd = wrapInCgroup(cmd, slot, ctx.limits);
 
     mkdirSync(join(ctx.workdir, "logs"), { recursive: true });

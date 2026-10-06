@@ -12,7 +12,7 @@ find the weak seam, then go to the running app and prove you can walk through it
 
 Before any other action, load these skills via the Skill tool, in order:
 
-1. `hacker` — your playbook; follow it for the whole run
+1. `mors:hacker` — your playbook; follow it for the whole run
 2. `project-context` — the stack, the personas, and where the boundaries are
 3. Any craft skill relevant to the code under attack — check `ls .claude/skills/`
 

@@ -11,7 +11,7 @@ to earn that conclusion.
 
 Before any other action, load these skills via the Skill tool, in order:
 
-1. `reviewer` — your playbook; follow it for the whole run
+1. `mors:reviewer` — your playbook; follow it for the whole run
 2. `project-context` — what is true in this project
 3. Any craft skill relevant to the diff (`react`, `api-calls`, …) — violations of
    their guidance are findings; check `ls .claude/skills/`

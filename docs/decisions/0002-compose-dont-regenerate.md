@@ -77,7 +77,7 @@ out goes through the same review and gates as anything else.
 ## Consequences
 
 - The roster grows a craft role (name to be settled: architect, librarian). Its playbook and
-  agent stub follow the existing pattern — a thin stub in `.claude/agents/`, substance in a skill.
+  agent stub follow the existing pattern — a thin stub in `agents/`, substance in a skill.
 - A catalog needs a home and a format: per project, across projects, or both.
 - The proof packet (0001) carries the module map and anything flagged worth studying or
   releasing.

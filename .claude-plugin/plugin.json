@@ -1,0 +1,7 @@
+{
+  "name": "mors",
+  "description": "An autonomous software team: idea to journeys to prototype to merged, verified code, with adversarial review and gates no agent can skip.",
+  "version": "0.1.0",
+  "author": { "name": "conrad mugabe" },
+  "repository": "https://github.com/conradmugabe/engineers"
+}

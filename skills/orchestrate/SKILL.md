@@ -24,7 +24,7 @@ read recent comments, and pick up wherever the previous session stopped.
 
 **Dispatch.** Take `ready` issues whose `Depends on` issues are all closed. Cap: 3 in
 flight. For each: create a branch `feat/<issue>-<slug>` off the feature branch, label
-`in-progress`, and dispatch the role's agent (backend-engineer / frontend-engineer) in
+`in-progress`, and dispatch the role's agent (`mors:backend-engineer` / `mors:frontend-engineer`) in
 the **background** with worktree isolation, passing the full issue body and the branch
 name. Dispatch independent issues in parallel in one go. Then end your turn — you are
 event-driven; completions wake you. Never sit polling.
@@ -34,10 +34,10 @@ branch and run the full test suite yourself (commands are in `project-context`).
 Failure → send the raw output back to the SAME agent (its context is intact) and go
 idle again. Cap: 3 fix rounds, then label `blocked` with a comment and move on.
 
-**Gate 2 — adversarial review.** Tests pass → dispatch `reviewer` on the diff
+**Gate 2 — adversarial review.** Tests pass → dispatch `mors:reviewer` on the diff
 (background). Findings → back to the implementing engineer, then re-gate from Gate 1.
 
-**Gate 3 — QA.** Review clean → dispatch `qa-engineer` on the branch (background). QA
+**Gate 3 — QA.** Review clean → dispatch `mors:qa-engineer` on the branch (background). QA
 writes automated tests that stay in the suite. New failures → back to the engineer,
 re-gate from Gate 1. QA's tests are now part of Gate 1 for every later issue.
 
@@ -64,7 +64,7 @@ feature's `feature:<slug>` label is closed, prepare the environment yourself:
 - Ensure the selected personas' **seeded test accounts** exist; create/reset if needed.
 - Confirm the app responds before dispatching.
 
-Then dispatch **one `blind-tester` run per selected persona** — never one run with
+Then dispatch **one `mors:blind-tester` run per selected persona** — never one run with
 multiple logins. A tester who has seen the app as a pro user cannot authentically be
 confused as a free user; persona purity is the point. Each run gets exactly three
 things: the URL, that one persona's identity and credentials ("you use the free
@@ -85,9 +85,9 @@ anything reaches `main`, the assembled feature gets attacked. Use the same envir
 you prepared for Gate 4 — a running instance on a test environment with seeded data,
 never production. Run the pair:
 
-- Dispatch the `security-engineer` (blue) on the feature branch and running instance: a
+- Dispatch the `mors:security-engineer` (blue) on the feature branch and running instance: a
   systematic audit, hardening with regression tests, and ownership of the verdict.
-- Dispatch the `hacker` (red) against the same running instance with full code access:
+- Dispatch the `mors:hacker` (red) against the same running instance with full code access:
   land real exploits with reproduction steps.
 
 Run them so the loop closes: the hacker's proven exploits and the security engineer's
