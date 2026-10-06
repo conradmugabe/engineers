@@ -13,15 +13,15 @@
     "format:check": "prettier --check ."
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "@types/bun": "latest",
-    "eslint": "^10.12.0",
-    "eslint-config-prettier": "^10.1.8",
-    "husky": "^9.1.7",
-    "lint-staged": "^17.6.0",
-    "prettier": "^3.9.9",
-    "typescript": "^5.8.0",
-    "typescript-eslint": "^8.71.1"
+    "@eslint/js": "10.0.1",
+    "@types/bun": "1.4.2",
+    "eslint": "10.12.0",
+    "eslint-config-prettier": "10.1.8",
+    "husky": "9.1.7",
+    "lint-staged": "17.6.0",
+    "prettier": "3.9.9",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.1"
   },
   "lint-staged": {
     "*.{ts,js}": [

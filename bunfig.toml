@@ -1,0 +1,3 @@
+[install]
+# Pin what `bun add` writes to package.json: no ^ or ~ ranges.
+exact = true
